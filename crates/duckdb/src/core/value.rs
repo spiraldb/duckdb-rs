@@ -1,8 +1,8 @@
 use crate::ffi::{duckdb_destroy_value, duckdb_get_int64, duckdb_get_varchar, duckdb_value};
 use libduckdb_sys::{
-    duckdb_create_bool, duckdb_create_double, duckdb_create_float, duckdb_create_int16, duckdb_create_int32,
-    duckdb_create_int64, duckdb_create_int8, duckdb_create_null_value, duckdb_create_uint16, duckdb_create_uint32,
-    duckdb_create_uint64, duckdb_create_uint8,
+    duckdb_create_blob, duckdb_create_bool, duckdb_create_double, duckdb_create_float, duckdb_create_int16,
+    duckdb_create_int32, duckdb_create_int64, duckdb_create_int8, duckdb_create_null_value, duckdb_create_uint16,
+    duckdb_create_uint32, duckdb_create_uint64, duckdb_create_uint8,
 };
 use std::{ffi::CString, fmt};
 
@@ -36,6 +36,22 @@ impl Value {
 impl From<duckdb_value> for Value {
     fn from(ptr: duckdb_value) -> Self {
         Self { ptr }
+    }
+}
+
+impl From<&str> for Value {
+    fn from(ptr: &str) -> Self {
+        ptr.as_bytes().into()
+    }
+}
+
+impl From<&[u8]> for Value {
+    fn from(ptr: &[u8]) -> Self {
+        unsafe {
+            Self {
+                ptr: duckdb_create_blob(ptr.as_ptr(), ptr.len() as u64),
+            }
+        }
     }
 }
 
