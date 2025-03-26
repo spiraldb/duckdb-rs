@@ -459,6 +459,12 @@ pub struct _duckdb_profiling_info {
 }
 #[doc = "! Holds a recursive tree that matches the query plan."]
 pub type duckdb_profiling_info = *mut _duckdb_profiling_info;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _duckdb_base_statistic {
+    pub internal_ptr: *mut ::std::os::raw::c_void,
+}
+pub type duckdb_base_statistic = *mut _duckdb_base_statistic;
 #[doc = "! Holds state during the C API extension intialization process"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1963,6 +1969,30 @@ unsafe extern "C" {
     #[doc = "Register the scalar function set within the given connection.\n\nThe set requires at least a single valid overload.\n\nIf the set is incomplete or a function with this name already exists DuckDBError is returned.\n\n @param con The connection to register it in.\n @param set The function set to register\n @return Whether or not the registration was successful."]
     pub fn duckdb_register_scalar_function_set(con: duckdb_connection, set: duckdb_scalar_function_set)
         -> duckdb_state;
+}
+unsafe extern "C" {
+    #[doc = "Returns a statistic for the type of the value passed."]
+    pub fn duckdb_create_base_statistic(type_: duckdb_logical_type) -> duckdb_base_statistic;
+}
+unsafe extern "C" {
+    #[doc = "Destroys a statistic"]
+    pub fn duckdb_destroy_base_statistic(statistic: *mut duckdb_base_statistic);
+}
+unsafe extern "C" {
+    #[doc = "Sets the min value for a numeric statistic (if null is passed this signifies no value)."]
+    pub fn duckdb_statistic_set_min(statistic: duckdb_base_statistic, min: duckdb_value, is_truncated: bool);
+}
+unsafe extern "C" {
+    #[doc = "Sets the maximum value for the given statistics object.\n\nThis function updates the maximum value stored in the statistics object based on the provided `max` value.\nFor numeric statistics, it directly sets the maximum value.\nFor string statistics, it updates the maximum value by comparing the provided string to the current maximum.\nIf the provided string is longer than the maximum string length allowed, the maximum string length is reset.\n\n @param statistic The statistics object to update.\n @param max The new maximum value to set, if the value is null this unsets the statistic.\n @param is_truncated If the value truncated, ignored for non-variable length values (e.g. ints)"]
+    pub fn duckdb_statistic_set_max(statistic: duckdb_base_statistic, max: duckdb_value, is_truncated: bool);
+}
+unsafe extern "C" {
+    #[doc = "Sets if the segment can contain NULL values"]
+    pub fn duckdb_statistic_set_has_nulls(statistic: duckdb_base_statistic);
+}
+unsafe extern "C" {
+    #[doc = "Set if the segment can contain values that are not null."]
+    pub fn duckdb_statistic_set_has_no_nulls(statistic: duckdb_base_statistic);
 }
 unsafe extern "C" {
     #[doc = "Creates a new empty aggregate function.\n\nThe return value should be destroyed with `duckdb_destroy_aggregate_function`.\n\n @return The aggregate function object."]
