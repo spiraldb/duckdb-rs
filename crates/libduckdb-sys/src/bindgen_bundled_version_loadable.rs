@@ -459,6 +459,12 @@ pub struct _duckdb_profiling_info {
 }
 #[doc = "! Holds a recursive tree that matches the query plan."]
 pub type duckdb_profiling_info = *mut _duckdb_profiling_info;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _duckdb_base_statistic {
+    pub internal_ptr: *mut ::std::os::raw::c_void,
+}
+pub type duckdb_base_statistic = *mut _duckdb_base_statistic;
 #[doc = "! Holds state during the C API extension intialization process"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -656,6 +662,17 @@ pub struct duckdb_extension_access {
             version: *const ::std::os::raw::c_char,
         ) -> *const ::std::os::raw::c_void,
     >,
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ExternalBuffer {
+    _unused: [u8; 0],
+}
+pub type external_buffer_free = ::std::option::Option<unsafe extern "C" fn(buffer: *mut ExternalBuffer)>;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct CppVectorBuffer {
+    pub ptr: *mut ::std::os::raw::c_void,
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1701,6 +1718,24 @@ pub struct duckdb_ext_api_v1 {
             row: idx_t,
         ) -> duckdb_state,
     >,
+    pub NewCppVectorBuffer: ::std::option::Option<
+        unsafe extern "C" fn(buffer: *mut ExternalBuffer, free_fn: *mut external_buffer_free) -> *mut CppVectorBuffer,
+    >,
+    pub AssignBufferToVec:
+        ::std::option::Option<unsafe extern "C" fn(vec: duckdb_vector, buffer: *mut CppVectorBuffer)>,
+    pub duckdb_create_base_statistic:
+        ::std::option::Option<unsafe extern "C" fn(type_: duckdb_logical_type) -> duckdb_base_statistic>,
+    pub duckdb_destroy_base_statistic:
+        ::std::option::Option<unsafe extern "C" fn(statistic: *mut duckdb_base_statistic)>,
+    pub duckdb_statistic_set_min: ::std::option::Option<
+        unsafe extern "C" fn(statistic: duckdb_base_statistic, min: duckdb_value, is_truncated: bool),
+    >,
+    pub duckdb_statistic_set_max: ::std::option::Option<
+        unsafe extern "C" fn(statistic: duckdb_base_statistic, max: duckdb_value, is_truncated: bool),
+    >,
+    pub duckdb_statistic_set_has_nulls: ::std::option::Option<unsafe extern "C" fn(statistic: duckdb_base_statistic)>,
+    pub duckdb_statistic_set_has_no_nulls:
+        ::std::option::Option<unsafe extern "C" fn(statistic: duckdb_base_statistic)>,
     pub duckdb_slice_vector: ::std::option::Option<
         unsafe extern "C" fn(vector: duckdb_vector, selection: duckdb_selection_vector, len: idx_t),
     >,
@@ -8821,6 +8856,142 @@ pub unsafe fn duckdb_append_default_to_chunk(
     (fun)(appender, chunk, col, row)
 }
 
+static __NEWCPPVECTORBUFFER: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn NewCppVectorBuffer(
+    buffer: *mut ExternalBuffer,
+    free_fn: *mut external_buffer_free,
+) -> *mut CppVectorBuffer {
+    let function_ptr = __NEWCPPVECTORBUFFER.load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(
+        buffer: *mut ExternalBuffer,
+        free_fn: *mut external_buffer_free,
+    ) -> *mut CppVectorBuffer = ::std::mem::transmute(function_ptr);
+    (fun)(buffer, free_fn)
+}
+
+static __ASSIGNBUFFERTOVEC: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn AssignBufferToVec(vec: duckdb_vector, buffer: *mut CppVectorBuffer) {
+    let function_ptr = __ASSIGNBUFFERTOVEC.load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(vec: duckdb_vector, buffer: *mut CppVectorBuffer) = ::std::mem::transmute(
+        function_ptr,
+    );
+    (fun)(vec, buffer)
+}
+
+static __DUCKDB_CREATE_BASE_STATISTIC: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_create_base_statistic(
+    type_: duckdb_logical_type,
+) -> duckdb_base_statistic {
+    let function_ptr = __DUCKDB_CREATE_BASE_STATISTIC
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(type_: duckdb_logical_type) -> duckdb_base_statistic = ::std::mem::transmute(
+        function_ptr,
+    );
+    (fun)(type_)
+}
+
+static __DUCKDB_DESTROY_BASE_STATISTIC: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_destroy_base_statistic(statistic: *mut duckdb_base_statistic) {
+    let function_ptr = __DUCKDB_DESTROY_BASE_STATISTIC
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(statistic: *mut duckdb_base_statistic) = ::std::mem::transmute(
+        function_ptr,
+    );
+    (fun)(statistic)
+}
+
+static __DUCKDB_STATISTIC_SET_MIN: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_statistic_set_min(
+    statistic: duckdb_base_statistic,
+    min: duckdb_value,
+    is_truncated: bool,
+) {
+    let function_ptr = __DUCKDB_STATISTIC_SET_MIN
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(
+        statistic: duckdb_base_statistic,
+        min: duckdb_value,
+        is_truncated: bool,
+    ) = ::std::mem::transmute(function_ptr);
+    (fun)(statistic, min, is_truncated)
+}
+
+static __DUCKDB_STATISTIC_SET_MAX: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_statistic_set_max(
+    statistic: duckdb_base_statistic,
+    max: duckdb_value,
+    is_truncated: bool,
+) {
+    let function_ptr = __DUCKDB_STATISTIC_SET_MAX
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(
+        statistic: duckdb_base_statistic,
+        max: duckdb_value,
+        is_truncated: bool,
+    ) = ::std::mem::transmute(function_ptr);
+    (fun)(statistic, max, is_truncated)
+}
+
+static __DUCKDB_STATISTIC_SET_HAS_NULLS: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_statistic_set_has_nulls(statistic: duckdb_base_statistic) {
+    let function_ptr = __DUCKDB_STATISTIC_SET_HAS_NULLS
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(statistic: duckdb_base_statistic) = ::std::mem::transmute(
+        function_ptr,
+    );
+    (fun)(statistic)
+}
+
+static __DUCKDB_STATISTIC_SET_HAS_NO_NULLS: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_statistic_set_has_no_nulls(statistic: duckdb_base_statistic) {
+    let function_ptr = __DUCKDB_STATISTIC_SET_HAS_NO_NULLS
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(statistic: duckdb_base_statistic) = ::std::mem::transmute(
+        function_ptr,
+    );
+    (fun)(statistic)
+}
+
 static __DUCKDB_SLICE_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -10578,6 +10749,38 @@ pub unsafe fn duckdb_rs_extension_api_init(
     }
     if let Some(fun) = (*p_api).duckdb_append_default_to_chunk {
         __DUCKDB_APPEND_DEFAULT_TO_CHUNK
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).NewCppVectorBuffer {
+        __NEWCPPVECTORBUFFER
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).AssignBufferToVec {
+        __ASSIGNBUFFERTOVEC
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_create_base_statistic {
+        __DUCKDB_CREATE_BASE_STATISTIC
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_destroy_base_statistic {
+        __DUCKDB_DESTROY_BASE_STATISTIC
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_statistic_set_min {
+        __DUCKDB_STATISTIC_SET_MIN
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_statistic_set_max {
+        __DUCKDB_STATISTIC_SET_MAX
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_statistic_set_has_nulls {
+        __DUCKDB_STATISTIC_SET_HAS_NULLS
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_statistic_set_has_no_nulls {
+        __DUCKDB_STATISTIC_SET_HAS_NO_NULLS
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).duckdb_slice_vector {
