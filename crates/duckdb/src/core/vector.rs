@@ -114,6 +114,20 @@ impl FlatVector {
         unsafe { LogicalTypeHandle::new(duckdb_vector_get_column_type(self.ptr)) }
     }
 
+    pub fn validity_slice(&self) -> Option<&mut [u64]> {
+        let ptr = unsafe { duckdb_vector_get_validity(self.ptr) };
+        if ptr.is_null() {
+            return None;
+        }
+        Some(unsafe { slice::from_raw_parts_mut(ptr, self.capacity()) })
+    }
+
+    pub fn init_get_validity_slice(&self) -> &mut [u64] {
+        unsafe { duckdb_vector_ensure_validity_writable(self.ptr) };
+        let ptr = unsafe { duckdb_vector_get_validity(self.ptr) };
+        unsafe { slice::from_raw_parts_mut(ptr, self.capacity()) }
+    }
+
     /// Set row as null
     pub fn set_null(&mut self, row: usize) {
         unsafe {
