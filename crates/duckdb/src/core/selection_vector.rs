@@ -32,7 +32,7 @@ impl SelectionVector {
 
 impl FromIterator<u32> for SelectionVector {
     fn from_iter<T: IntoIterator<Item = u32>>(iter: T) -> Self {
-        let mut iter = iter.into_iter();
+        let iter = iter.into_iter();
         let (lower, upper) = iter.size_hint();
 
         // We only support creation of a sel vector from a sized iterator.
@@ -51,5 +51,22 @@ impl FromIterator<u32> for SelectionVector {
         });
 
         SelectionVector { ptr, len: len as idx_t }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::core::SelectionVector;
+
+    #[test]
+    fn test_selection_vector() {
+        let vec: SelectionVector = (0..2048).collect();
+        assert_eq!(vec.len(), 2048);
+    }
+
+    #[test]
+    fn test_large_selection_vector() {
+        let vec: SelectionVector = (0..2049).collect();
+        assert_eq!(vec.len(), 2049);
     }
 }
