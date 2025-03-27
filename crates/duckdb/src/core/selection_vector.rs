@@ -33,8 +33,12 @@ impl SelectionVector {
 impl FromIterator<u32> for SelectionVector {
     fn from_iter<T: IntoIterator<Item = u32>>(iter: T) -> Self {
         let mut iter = iter.into_iter();
-        let len = iter.size_hint().0;
+        let (lower, upper) = iter.size_hint();
 
+        // We only support creation of a sel vector from a sized iterator.
+        assert_eq!(Some(lower), upper);
+
+        let len = lower;
         let ptr = unsafe { duckdb_create_selection_vector(len as idx_t) };
         let data = unsafe { duckdb_selection_vector_get_data_ptr(ptr) };
 
