@@ -33,6 +33,7 @@ impl SelectionVector {
 impl FromIterator<u32> for SelectionVector {
     fn from_iter<T: IntoIterator<Item = u32>>(iter: T) -> Self {
         let iter = iter.into_iter();
+        // Size hint is not checked, therefore a bad iterator will invalid this.
         let (lower, upper) = iter.size_hint();
 
         // We only support creation of a sel vector from a sized iterator.
@@ -68,5 +69,36 @@ mod tests {
     fn test_large_selection_vector() {
         let vec: SelectionVector = (0..2049).collect();
         assert_eq!(vec.len(), 2049);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_panic_vector() {
+        let iter = BadIter(0);
+        let vec: SelectionVector = iter.collect();
+        let _ = vec;
+    }
+
+    struct BadIter(u32);
+
+    impl Iterator for BadIter {
+        type Item = u32;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let val = self.0;
+            self.0 += 1;
+            if val < 12 {
+                return Some(val);
+            };
+            None
+        }
+    }
+
+    impl ExactSizeIterator for BadIter {
+        fn len(&self) -> usize {
+            // This is not a valid size hint.
+            // This should fail.
+            10
+        }
     }
 }
