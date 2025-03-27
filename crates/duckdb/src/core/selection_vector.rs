@@ -29,3 +29,21 @@ impl SelectionVector {
         self.len
     }
 }
+
+impl FromIterator<u32> for SelectionVector {
+    fn from_iter<T: IntoIterator<Item = u32>>(iter: T) -> Self {
+        let mut iter = iter.into_iter();
+        let len = iter.size_hint().0;
+
+        let ptr = unsafe { duckdb_create_selection_vector(len as idx_t) };
+        let data = unsafe { duckdb_selection_vector_get_data_ptr(ptr) };
+
+        for i in 0..len {
+            unsafe {
+                ptr::write(data.add(i), iter.next().unwrap());
+            }
+        }
+
+        SelectionVector { ptr, len: len as idx_t }
+    }
+}
