@@ -40,13 +40,15 @@ impl FromIterator<u32> for SelectionVector {
 
         let len = lower;
         let ptr = unsafe { duckdb_create_selection_vector(len as idx_t) };
-        let data = unsafe { duckdb_selection_vector_get_data_ptr(ptr) };
+        let mut data = unsafe { duckdb_selection_vector_get_data_ptr(ptr) };
+        let hd = data;
 
-        for i in 0..len {
-            unsafe {
-                ptr::write(data.add(i), iter.next().unwrap());
-            }
-        }
+        iter.for_each(|item| unsafe {
+            // SAFETY: We know we have enough capacity to write the item.
+            data.write(item);
+            data = data.add(1);
+            debug_assert!(data < hd.add(len));
+        });
 
         SelectionVector { ptr, len: len as idx_t }
     }
