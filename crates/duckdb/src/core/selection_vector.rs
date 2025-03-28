@@ -48,7 +48,7 @@ impl FromIterator<u32> for SelectionVector {
             // SAFETY: We know we have enough capacity to write the item.
             data.write(item);
             data = data.add(1);
-            debug_assert!(data < hd.add(len));
+            debug_assert!(data <= hd.add(len));
         });
 
         SelectionVector { ptr, len: len as idx_t }

@@ -1,8 +1,8 @@
 use crate::ffi::{duckdb_destroy_value, duckdb_get_int64, duckdb_get_varchar, duckdb_value};
 use libduckdb_sys::{
-    duckdb_create_blob, duckdb_create_bool, duckdb_create_double, duckdb_create_float, duckdb_create_int16,
-    duckdb_create_int32, duckdb_create_int64, duckdb_create_int8, duckdb_create_null_value, duckdb_create_uint16,
-    duckdb_create_uint32, duckdb_create_uint64, duckdb_create_uint8,
+    duckdb_create_blob, duckdb_create_bool, duckdb_create_date, duckdb_create_double, duckdb_create_float,
+    duckdb_create_int16, duckdb_create_int32, duckdb_create_int64, duckdb_create_int8, duckdb_create_null_value,
+    duckdb_create_uint16, duckdb_create_uint32, duckdb_create_uint64, duckdb_create_uint8, duckdb_date,
 };
 use std::{ffi::CString, fmt};
 
@@ -29,6 +29,13 @@ impl Value {
     pub fn null() -> Value {
         Value {
             ptr: unsafe { duckdb_create_null_value() },
+        }
+    }
+
+    pub fn date_from_day_count(value: i32) -> Value {
+        let d = duckdb_date { days: value };
+        Self {
+            ptr: unsafe { duckdb_create_date(d) },
         }
     }
 }

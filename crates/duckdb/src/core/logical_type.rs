@@ -68,6 +68,8 @@ pub enum LogicalTypeId {
     Union = DUCKDB_TYPE_DUCKDB_TYPE_UNION,
     /// Timestamp TZ
     TimestampTZ = DUCKDB_TYPE_DUCKDB_TYPE_TIMESTAMP_TZ,
+
+    SQLNull = DUCKDB_TYPE_DUCKDB_TYPE_SQLNULL,
 }
 
 impl From<u32> for LogicalTypeId {

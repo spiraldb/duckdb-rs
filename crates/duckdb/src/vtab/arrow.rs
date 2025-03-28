@@ -19,11 +19,11 @@ use arrow::{
 };
 
 use arrow::{
+    array::NullArray,
     datatypes::*,
     ffi::{from_ffi, FFI_ArrowArray, FFI_ArrowSchema},
     record_batch::RecordBatch,
 };
-
 use libduckdb_sys::{
     duckdb_date, duckdb_hugeint, duckdb_interval, duckdb_string_t, duckdb_time, duckdb_timestamp, duckdb_vector,
 };
@@ -258,6 +258,7 @@ pub fn flat_vector_to_arrow_array(
 ) -> Result<Arc<dyn Array>, Box<dyn std::error::Error>> {
     let type_id = vector.logical_type().id();
     match type_id {
+        LogicalTypeId::SQLNull => Ok(Arc::new(NullArray::new(len))),
         LogicalTypeId::Integer => {
             let data = vector.as_slice_with_len::<i32>(len);
 
