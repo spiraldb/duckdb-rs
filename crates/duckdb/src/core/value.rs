@@ -41,9 +41,9 @@ impl Value {
         }
     }
 
-    pub fn time_from_ms(value: i64) -> Value {
+    pub fn time_from_us(micros: i64) -> Value {
         Self {
-            ptr: unsafe { duckdb_create_time(duckdb_time { micros: value }) },
+            ptr: unsafe { duckdb_create_time(duckdb_time { micros }) },
         }
     }
 
