@@ -477,6 +477,7 @@ mod bindings {
             .write(Box::new(&mut output))
             .expect("could not write output of bindgen");
 
+        #[allow(unused_mut)]
         let mut output = String::from_utf8(output).expect("bindgen output was not UTF-8?!");
 
         #[cfg(feature = "loadable-extension")]

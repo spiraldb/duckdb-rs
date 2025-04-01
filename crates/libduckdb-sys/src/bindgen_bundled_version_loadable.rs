@@ -293,13 +293,13 @@ pub struct duckdb_column {
     pub deprecated_name: *mut ::std::os::raw::c_char,
     pub internal_data: *mut ::std::os::raw::c_void,
 }
-#[doc = "! A vector to a specified column in a data chunk. Lives as long as the\n! data chunk lives, i.e., must not be destroyed."]
+#[doc = "! Either a vector to a specified column in a data chunk, or a allocated vector.\n! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.\n! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _duckdb_vector {
     pub internal_ptr: *mut ::std::os::raw::c_void,
 }
-#[doc = "! A vector to a specified column in a data chunk. Lives as long as the\n! data chunk lives, i.e., must not be destroyed."]
+#[doc = "! Either a vector to a specified column in a data chunk, or a allocated vector.\n! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.\n! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`."]
 pub type duckdb_vector = *mut _duckdb_vector;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1736,11 +1736,16 @@ pub struct duckdb_ext_api_v1 {
     pub duckdb_statistic_set_has_nulls: ::std::option::Option<unsafe extern "C" fn(statistic: duckdb_base_statistic)>,
     pub duckdb_statistic_set_has_no_nulls:
         ::std::option::Option<unsafe extern "C" fn(statistic: duckdb_base_statistic)>,
+    pub duckdb_create_vector:
+        ::std::option::Option<unsafe extern "C" fn(type_: duckdb_logical_type, capacity: idx_t) -> duckdb_vector>,
+    pub duckdb_destroy_vector: ::std::option::Option<unsafe extern "C" fn(vector: *mut duckdb_vector)>,
     pub duckdb_slice_vector: ::std::option::Option<
         unsafe extern "C" fn(vector: duckdb_vector, selection: duckdb_selection_vector, len: idx_t),
     >,
     pub duckdb_assign_constant_vector:
         ::std::option::Option<unsafe extern "C" fn(vector: duckdb_vector, value: duckdb_value)>,
+    pub duckdb_reference_vector:
+        ::std::option::Option<unsafe extern "C" fn(to_vector: duckdb_vector, from_vector: duckdb_vector)>,
     pub duckdb_create_selection_vector:
         ::std::option::Option<unsafe extern "C" fn(size: idx_t) -> duckdb_selection_vector>,
     pub duckdb_destroy_selection_vector: ::std::option::Option<unsafe extern "C" fn(vector: duckdb_selection_vector)>,
@@ -8992,6 +8997,40 @@ pub unsafe fn duckdb_statistic_set_has_no_nulls(statistic: duckdb_base_statistic
     (fun)(statistic)
 }
 
+static __DUCKDB_CREATE_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_create_vector(
+    type_: duckdb_logical_type,
+    capacity: idx_t,
+) -> duckdb_vector {
+    let function_ptr = __DUCKDB_CREATE_VECTOR
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(
+        type_: duckdb_logical_type,
+        capacity: idx_t,
+    ) -> duckdb_vector = ::std::mem::transmute(function_ptr);
+    (fun)(type_, capacity)
+}
+
+static __DUCKDB_DESTROY_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_destroy_vector(vector: *mut duckdb_vector) {
+    let function_ptr = __DUCKDB_DESTROY_VECTOR
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(vector: *mut duckdb_vector) = ::std::mem::transmute(
+        function_ptr,
+    );
+    (fun)(vector)
+}
+
 static __DUCKDB_SLICE_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -9026,6 +9065,25 @@ pub unsafe fn duckdb_assign_constant_vector(vector: duckdb_vector, value: duckdb
         function_ptr,
     );
     (fun)(vector, value)
+}
+
+static __DUCKDB_REFERENCE_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_reference_vector(
+    to_vector: duckdb_vector,
+    from_vector: duckdb_vector,
+) {
+    let function_ptr = __DUCKDB_REFERENCE_VECTOR
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(
+        to_vector: duckdb_vector,
+        from_vector: duckdb_vector,
+    ) = ::std::mem::transmute(function_ptr);
+    (fun)(to_vector, from_vector)
 }
 
 static __DUCKDB_CREATE_SELECTION_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
@@ -10783,12 +10841,24 @@ pub unsafe fn duckdb_rs_extension_api_init(
         __DUCKDB_STATISTIC_SET_HAS_NO_NULLS
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
+    if let Some(fun) = (*p_api).duckdb_create_vector {
+        __DUCKDB_CREATE_VECTOR
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_destroy_vector {
+        __DUCKDB_DESTROY_VECTOR
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
     if let Some(fun) = (*p_api).duckdb_slice_vector {
         __DUCKDB_SLICE_VECTOR
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).duckdb_assign_constant_vector {
         __DUCKDB_ASSIGN_CONSTANT_VECTOR
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_reference_vector {
+        __DUCKDB_REFERENCE_VECTOR
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).duckdb_create_selection_vector {

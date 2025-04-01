@@ -550,6 +550,24 @@ pub trait WritableVector {
     fn struct_vector(&mut self) -> StructVector;
 }
 
+impl WritableVector for FlatVector {
+    fn array_vector(&mut self) -> ArrayVector {
+        unreachable!()
+    }
+
+    fn flat_vector(&mut self) -> FlatVector {
+        self.clone()
+    }
+
+    fn struct_vector(&mut self) -> StructVector {
+        unreachable!()
+    }
+
+    fn list_vector(&mut self) -> ListVector {
+        unreachable!()
+    }
+}
+
 /// Writes an Arrow array to a `WritableVector`.
 pub fn write_arrow_array_to_vector(
     col: &Arc<dyn Array>,
@@ -682,7 +700,12 @@ pub fn record_batch_to_duckdb_data_chunk(
 }
 
 fn primitive_array_to_flat_vector<T: ArrowPrimitiveType>(array: &PrimitiveArray<T>, out_vector: &mut FlatVector) {
-    assert!(array.len() <= out_vector.capacity());
+    assert!(
+        array.len() <= out_vector.capacity(),
+        "array len {}, out vector capacity {}",
+        array.len(),
+        out_vector.capacity()
+    );
     out_vector.copy::<T::Native>(array.values());
     set_nulls_in_flat_vector(array, out_vector);
 }

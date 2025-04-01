@@ -2,8 +2,9 @@ use super::{LogicalTypeHandle, Value};
 use crate::{
     core::selection_vector::SelectionVector,
     ffi::{
-        duckdb_list_entry, duckdb_list_vector_get_child, duckdb_list_vector_get_size, duckdb_list_vector_reserve,
-        duckdb_list_vector_set_size, duckdb_slice_vector, duckdb_struct_type_child_count,
+        duckdb_assign_constant_vector, duckdb_create_vector, duckdb_destroy_vector, duckdb_list_entry,
+        duckdb_list_vector_get_child, duckdb_list_vector_get_size, duckdb_list_vector_reserve,
+        duckdb_list_vector_set_size, duckdb_reference_vector, duckdb_slice_vector, duckdb_struct_type_child_count,
         duckdb_struct_type_child_name, duckdb_struct_vector_get_child, duckdb_validity_set_row_invalid, duckdb_vector,
         duckdb_vector_assign_string_element, duckdb_vector_assign_string_element_len,
         duckdb_vector_ensure_validity_writable, duckdb_vector_get_column_type, duckdb_vector_get_data,
@@ -11,8 +12,8 @@ use crate::{
     },
 };
 use libduckdb_sys::{
-    duckdb_array_type_array_size, duckdb_array_vector_get_child, duckdb_assign_constant_vector,
-    duckdb_create_array_value, duckdb_create_scalar_function, duckdb_validity_row_is_valid, idx_t, DuckDbString,
+    duckdb_array_type_array_size, duckdb_array_vector_get_child, duckdb_create_array_value,
+    duckdb_create_scalar_function, duckdb_validity_row_is_valid, idx_t, DuckDbString,
 };
 use std::{
     any::Any,
@@ -35,6 +36,17 @@ pub trait Vector {
 pub struct FlatVector {
     ptr: duckdb_vector,
     capacity: usize,
+    owned: bool,
+}
+
+impl Clone for FlatVector {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr,
+            capacity: self.capacity,
+            owned: false,
+        }
+    }
 }
 
 impl From<duckdb_vector> for FlatVector {
@@ -42,6 +54,7 @@ impl From<duckdb_vector> for FlatVector {
         Self {
             ptr,
             capacity: unsafe { duckdb_vector_size() as usize },
+            owned: false,
         }
     }
 }
@@ -56,9 +69,30 @@ impl Vector for FlatVector {
     }
 }
 
+impl Drop for FlatVector {
+    fn drop(&mut self) {
+        if self.owned && !self.ptr.is_null() {
+            unsafe { duckdb_destroy_vector(&mut self.ptr) }
+        }
+    }
+}
+
 impl FlatVector {
     fn with_capacity(ptr: duckdb_vector, capacity: usize) -> Self {
-        Self { ptr, capacity }
+        Self {
+            ptr,
+            capacity,
+            owned: false,
+        }
+    }
+
+    pub fn allocate_new_vector_with_capacity(logical_type: LogicalTypeHandle, capacity: usize) -> Self {
+        let ptr = unsafe { duckdb_create_vector(logical_type.ptr, capacity as u64) };
+        Self {
+            ptr,
+            capacity,
+            owned: true,
+        }
     }
 
     /// Returns the capacity of the vector
@@ -147,6 +181,11 @@ impl FlatVector {
         unsafe { duckdb_assign_constant_vector(self.ptr, value.ptr) }
         // Sets the internal duckdb buffer to be of size 1
         self.capacity = 1;
+    }
+
+    pub fn reference(&mut self, other: &FlatVector) {
+        unsafe { duckdb_reference_vector(self.ptr, other.ptr) }
+        self.capacity = other.capacity;
     }
 
     /// Copy data to the vector.
