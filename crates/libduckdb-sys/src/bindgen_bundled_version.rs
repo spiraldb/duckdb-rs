@@ -293,13 +293,13 @@ pub struct duckdb_column {
     pub deprecated_name: *mut ::std::os::raw::c_char,
     pub internal_data: *mut ::std::os::raw::c_void,
 }
-#[doc = "! A vector to a specified column in a data chunk. Lives as long as the\n! data chunk lives, i.e., must not be destroyed."]
+#[doc = "! Either a vector to a specified column in a data chunk, or a allocated vector.\n! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.\n! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _duckdb_vector {
     pub internal_ptr: *mut ::std::os::raw::c_void,
 }
-#[doc = "! A vector to a specified column in a data chunk. Lives as long as the\n! data chunk lives, i.e., must not be destroyed."]
+#[doc = "! Either a vector to a specified column in a data chunk, or a allocated vector.\n! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.\n! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`."]
 pub type duckdb_vector = *mut _duckdb_vector;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1767,6 +1767,14 @@ unsafe extern "C" {
     pub fn duckdb_destroy_data_chunk(chunk: *mut duckdb_data_chunk);
 }
 unsafe extern "C" {
+    #[doc = "Creates a flat vector."]
+    pub fn duckdb_create_vector(type_: duckdb_logical_type, capacity: idx_t) -> duckdb_vector;
+}
+unsafe extern "C" {
+    #[doc = "Destroys the vector and de-allocates all memory allocated for that vector, if unused else where."]
+    pub fn duckdb_destroy_vector(vector: *mut duckdb_vector);
+}
+unsafe extern "C" {
     #[doc = "Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.\nAfter calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current\ndata and validity pointers\n\n @param chunk The data chunk to reset."]
     pub fn duckdb_data_chunk_reset(chunk: duckdb_data_chunk);
 }
@@ -1850,6 +1858,10 @@ unsafe extern "C" {
 unsafe extern "C" {
     #[doc = "Copies the value from `value` to `vector`."]
     pub fn duckdb_assign_constant_vector(vector: duckdb_vector, value: duckdb_value);
+}
+unsafe extern "C" {
+    #[doc = "References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer"]
+    pub fn duckdb_reference_vector(to_vector: duckdb_vector, from_vector: duckdb_vector);
 }
 unsafe extern "C" {
     pub fn duckdb_stringify_data_chunk(chunk: duckdb_data_chunk) -> *const ::std::os::raw::c_char;
