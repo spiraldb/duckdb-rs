@@ -1767,14 +1767,6 @@ unsafe extern "C" {
     pub fn duckdb_destroy_data_chunk(chunk: *mut duckdb_data_chunk);
 }
 unsafe extern "C" {
-    #[doc = "Creates a flat vector."]
-    pub fn duckdb_create_vector(type_: duckdb_logical_type, capacity: idx_t) -> duckdb_vector;
-}
-unsafe extern "C" {
-    #[doc = "Destroys the vector and de-allocates all memory allocated for that vector, if unused else where."]
-    pub fn duckdb_destroy_vector(vector: *mut duckdb_vector);
-}
-unsafe extern "C" {
     #[doc = "Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.\nAfter calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current\ndata and validity pointers\n\n @param chunk The data chunk to reset."]
     pub fn duckdb_data_chunk_reset(chunk: duckdb_data_chunk);
 }
@@ -1793,6 +1785,14 @@ unsafe extern "C" {
 unsafe extern "C" {
     #[doc = "Sets the current number of tuples in a data chunk.\n\n @param chunk The data chunk to set the size in\n @param size The number of tuples in the data chunk"]
     pub fn duckdb_data_chunk_set_size(chunk: duckdb_data_chunk, size: idx_t);
+}
+unsafe extern "C" {
+    #[doc = "Creates a flat vector."]
+    pub fn duckdb_create_vector(type_: duckdb_logical_type, capacity: idx_t) -> duckdb_vector;
+}
+unsafe extern "C" {
+    #[doc = "Destroys the vector and de-allocates all memory allocated for that vector, if unused else where."]
+    pub fn duckdb_destroy_vector(vector: *mut duckdb_vector);
 }
 unsafe extern "C" {
     #[doc = "Retrieves the column type of the specified vector.\n\nThe result must be destroyed with `duckdb_destroy_logical_type`.\n\n @param vector The vector get the data from\n @return The type of the vector"]
@@ -1853,7 +1853,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     #[doc = "todo...* @param vector The vector which is to become a dictionary\n @param selection The selection vector\n @param len The length of the selection vector"]
-    pub fn duckdb_slice_vector(vector: duckdb_vector, selection: duckdb_selection_vector, len: idx_t);
+    pub fn duckdb_slice_vector(vector: duckdb_vector, dict_size: idx_t, selection: duckdb_selection_vector, len: idx_t);
 }
 unsafe extern "C" {
     #[doc = "Copies the value from `value` to `vector`."]
@@ -1862,6 +1862,13 @@ unsafe extern "C" {
 unsafe extern "C" {
     #[doc = "References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer"]
     pub fn duckdb_reference_vector(to_vector: duckdb_vector, from_vector: duckdb_vector);
+}
+unsafe extern "C" {
+    pub fn duckdb_set_dictionary_vector_id(
+        dict: duckdb_vector,
+        str_: *const ::std::os::raw::c_char,
+        str_len: ::std::os::raw::c_uint,
+    );
 }
 unsafe extern "C" {
     pub fn duckdb_stringify_data_chunk(chunk: duckdb_data_chunk) -> *const ::std::os::raw::c_char;

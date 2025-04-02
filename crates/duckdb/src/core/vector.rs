@@ -4,11 +4,11 @@ use crate::{
     ffi::{
         duckdb_assign_constant_vector, duckdb_create_vector, duckdb_destroy_vector, duckdb_list_entry,
         duckdb_list_vector_get_child, duckdb_list_vector_get_size, duckdb_list_vector_reserve,
-        duckdb_list_vector_set_size, duckdb_reference_vector, duckdb_slice_vector, duckdb_struct_type_child_count,
-        duckdb_struct_type_child_name, duckdb_struct_vector_get_child, duckdb_validity_set_row_invalid, duckdb_vector,
-        duckdb_vector_assign_string_element, duckdb_vector_assign_string_element_len,
-        duckdb_vector_ensure_validity_writable, duckdb_vector_get_column_type, duckdb_vector_get_data,
-        duckdb_vector_get_validity, duckdb_vector_size,
+        duckdb_list_vector_set_size, duckdb_reference_vector, duckdb_set_dictionary_vector_id, duckdb_slice_vector,
+        duckdb_struct_type_child_count, duckdb_struct_type_child_name, duckdb_struct_vector_get_child,
+        duckdb_validity_set_row_invalid, duckdb_vector, duckdb_vector_assign_string_element,
+        duckdb_vector_assign_string_element_len, duckdb_vector_ensure_validity_writable, duckdb_vector_get_column_type,
+        duckdb_vector_get_data, duckdb_vector_get_validity, duckdb_vector_size,
     },
 };
 use libduckdb_sys::{
@@ -171,9 +171,17 @@ impl FlatVector {
         }
     }
 
-    pub fn slice(&mut self, selection_vector: SelectionVector) -> DictionaryVector {
-        unsafe { duckdb_slice_vector(self.ptr, selection_vector.as_ptr(), selection_vector.len()) }
+    pub fn slice(&mut self, dict_len: u64, selection_vector: SelectionVector) -> DictionaryVector {
+        unsafe { duckdb_slice_vector(self.ptr, dict_len, selection_vector.as_ptr(), selection_vector.len()) }
         DictionaryVector::from(self.ptr)
+    }
+
+    pub fn set_dictionary_id(&mut self, dict_id: String) {
+        let dict_id = CString::new(dict_id).expect("CString::new failed");
+        unsafe {
+            duckdb_set_dictionary_vector_id(self.ptr, dict_id.as_ptr(), dict_id.as_bytes().len().try_into().unwrap())
+        }
+        std::mem::forget(dict_id);
     }
 
     pub fn assign_to_constant(&mut self, value: &Value) {
