@@ -1,10 +1,16 @@
 use crate::ffi::{duckdb_create_selection_vector, duckdb_selection_vector, duckdb_selection_vector_get_data_ptr};
-use libduckdb_sys::idx_t;
+use libduckdb_sys::{duckdb_destroy_selection_vector, idx_t};
 use std::ptr;
 
 pub struct SelectionVector {
     ptr: duckdb_selection_vector,
     len: idx_t,
+}
+
+impl Drop for SelectionVector {
+    fn drop(&mut self) {
+        unsafe { duckdb_destroy_selection_vector(self.ptr) }
+    }
 }
 
 impl SelectionVector {
