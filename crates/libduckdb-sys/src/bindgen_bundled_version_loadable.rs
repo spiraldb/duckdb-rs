@@ -1719,7 +1719,7 @@ pub struct duckdb_ext_api_v1 {
         ) -> duckdb_state,
     >,
     pub NewCppVectorBuffer: ::std::option::Option<
-        unsafe extern "C" fn(buffer: *mut ExternalBuffer, free_fn: *mut external_buffer_free) -> *mut CppVectorBuffer,
+        unsafe extern "C" fn(buffer: *mut ExternalBuffer, free_fn: external_buffer_free) -> *mut CppVectorBuffer,
     >,
     pub AssignBufferToVec:
         ::std::option::Option<unsafe extern "C" fn(vec: duckdb_vector, buffer: *mut CppVectorBuffer)>,
@@ -8869,7 +8869,7 @@ static __NEWCPPVECTORBUFFER: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::a
 );
 pub unsafe fn NewCppVectorBuffer(
     buffer: *mut ExternalBuffer,
-    free_fn: *mut external_buffer_free,
+    free_fn: external_buffer_free,
 ) -> *mut CppVectorBuffer {
     let function_ptr = __NEWCPPVECTORBUFFER.load(::std::sync::atomic::Ordering::Acquire);
     assert!(
@@ -8877,7 +8877,7 @@ pub unsafe fn NewCppVectorBuffer(
     );
     let fun: unsafe extern "C" fn(
         buffer: *mut ExternalBuffer,
-        free_fn: *mut external_buffer_free,
+        free_fn: external_buffer_free,
     ) -> *mut CppVectorBuffer = ::std::mem::transmute(function_ptr);
     (fun)(buffer, free_fn)
 }
