@@ -1,5 +1,5 @@
 use crate::ffi::{duckdb_create_selection_vector, duckdb_selection_vector, duckdb_selection_vector_get_data_ptr};
-use libduckdb_sys::{duckdb_destroy_selection_vector, idx_t};
+use libduckdb_sys::{duckdb_destroy_selection_vector, idx_t, sel_t};
 use std::ptr;
 
 pub struct SelectionVector {
@@ -25,6 +25,17 @@ impl SelectionVector {
             ptr,
             len: vec.len() as idx_t,
         }
+    }
+
+    pub fn new(length: idx_t) -> Self {
+        let ptr = unsafe { duckdb_create_selection_vector(length) };
+        Self { ptr, len: length }
+    }
+
+    pub fn as_data_slice(&mut self) -> &mut [sel_t] {
+        let data_ptr = unsafe { duckdb_selection_vector_get_data_ptr(self.ptr) };
+
+        unsafe { &mut *ptr::slice_from_raw_parts_mut(data_ptr, self.len as usize) }
     }
 
     pub(crate) fn as_ptr(&self) -> duckdb_selection_vector {
