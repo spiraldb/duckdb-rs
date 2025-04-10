@@ -19,13 +19,14 @@ use arrow::{
 };
 
 use arrow::{
-    array::NullArray,
+    array::{NullArray, TimestampMillisecondArray, TimestampSecondArray},
     datatypes::*,
     ffi::{from_ffi, FFI_ArrowArray, FFI_ArrowSchema},
     record_batch::RecordBatch,
 };
 use libduckdb_sys::{
-    duckdb_date, duckdb_hugeint, duckdb_interval, duckdb_string_t, duckdb_time, duckdb_timestamp, duckdb_vector,
+    duckdb_date, duckdb_hugeint, duckdb_interval, duckdb_string_t, duckdb_time, duckdb_timestamp, duckdb_timestamp_ms,
+    duckdb_timestamp_ns, duckdb_timestamp_s, duckdb_vector,
 };
 use num::{cast::AsPrimitive, ToPrimitive};
 
@@ -269,10 +270,43 @@ pub fn flat_vector_to_arrow_array(
                 }))),
             )))
         }
-        LogicalTypeId::Timestamp
-        | LogicalTypeId::TimestampMs
-        | LogicalTypeId::TimestampS
-        | LogicalTypeId::TimestampTZ => {
+        LogicalTypeId::TimestampS => {
+            let data = vector.as_slice_with_len::<duckdb_timestamp_s>(len);
+            let seconds = data.iter().map(|duckdb_timestamp_s { seconds }| *seconds);
+            let structs = TimestampSecondArray::from_iter_values_with_nulls(
+                seconds,
+                Some(NullBuffer::new(BooleanBuffer::collect_bool(data.len(), |row| {
+                    !vector.row_is_null(row as u64)
+                }))),
+            );
+
+            Ok(Arc::new(structs))
+        }
+        LogicalTypeId::TimestampMs => {
+            let data = vector.as_slice_with_len::<duckdb_timestamp_ms>(len);
+            let millis = data.iter().map(|duckdb_timestamp_ms { millis }| *millis);
+            let structs = TimestampMillisecondArray::from_iter_values_with_nulls(
+                millis,
+                Some(NullBuffer::new(BooleanBuffer::collect_bool(data.len(), |row| {
+                    !vector.row_is_null(row as u64)
+                }))),
+            );
+
+            Ok(Arc::new(structs))
+        }
+        LogicalTypeId::Timestamp => {
+            let data = vector.as_slice_with_len::<duckdb_timestamp>(len);
+            let micros = data.iter().map(|duckdb_timestamp { micros }| *micros);
+            let structs = TimestampMicrosecondArray::from_iter_values_with_nulls(
+                micros,
+                Some(NullBuffer::new(BooleanBuffer::collect_bool(data.len(), |row| {
+                    !vector.row_is_null(row as u64)
+                }))),
+            );
+
+            Ok(Arc::new(structs))
+        }
+        LogicalTypeId::TimestampTZ => {
             let data = vector.as_slice_with_len::<duckdb_timestamp>(len);
             let micros = data.iter().map(|duckdb_timestamp { micros }| *micros);
             let structs = TimestampMicrosecondArray::from_iter_values_with_nulls(
@@ -445,9 +479,10 @@ pub fn flat_vector_to_arrow_array(
             )))
         }
         LogicalTypeId::TimestampNs => {
+            // JOE: below is untrue?
             // even nano second precision is stored in micros when using the c api
-            let data = vector.as_slice_with_len::<duckdb_timestamp>(len);
-            let nanos = data.iter().map(|duckdb_timestamp { micros }| *micros * 1000);
+            let data = vector.as_slice_with_len::<duckdb_timestamp_ns>(len);
+            let nanos = data.iter().map(|duckdb_timestamp_ns { nanos }| *nanos);
             let structs = TimestampNanosecondArray::from_iter_values_with_nulls(
                 nanos,
                 Some(NullBuffer::new(BooleanBuffer::collect_bool(data.len(), |row| {
