@@ -307,6 +307,12 @@ pub struct _duckdb_selection_vector {
     pub internal_ptr: *mut ::std::os::raw::c_void,
 }
 pub type duckdb_selection_vector = *mut _duckdb_selection_vector;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _duckdb_vector_buffer {
+    pub ptr: *mut ::std::os::raw::c_void,
+}
+pub type duckdb_vector_buffer = *mut _duckdb_vector_buffer;
 #[doc = "! Strings are composed of a char pointer and a size. You must free string.data\n! with `duckdb_free`."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -665,15 +671,12 @@ pub struct duckdb_extension_access {
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
-pub struct ExternalBuffer {
+pub struct _external_buffer {
     _unused: [u8; 0],
 }
-pub type external_buffer_free = ::std::option::Option<unsafe extern "C" fn(buffer: *mut ExternalBuffer)>;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct CppVectorBuffer {
-    pub ptr: *mut ::std::os::raw::c_void,
-}
+#[doc = "! A opaque buffer which can be interpreted as a data buffer"]
+pub type external_buffer = *mut _external_buffer;
+pub type external_buffer_free = ::std::option::Option<unsafe extern "C" fn(buffer: external_buffer)>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct duckdb_ext_api_v1 {
@@ -1718,11 +1721,6 @@ pub struct duckdb_ext_api_v1 {
             row: idx_t,
         ) -> duckdb_state,
     >,
-    pub NewCppVectorBuffer: ::std::option::Option<
-        unsafe extern "C" fn(buffer: *mut ExternalBuffer, free_fn: external_buffer_free) -> *mut CppVectorBuffer,
-    >,
-    pub AssignBufferToVec:
-        ::std::option::Option<unsafe extern "C" fn(vec: duckdb_vector, buffer: *mut CppVectorBuffer)>,
     pub duckdb_create_base_statistic:
         ::std::option::Option<unsafe extern "C" fn(type_: duckdb_logical_type) -> duckdb_base_statistic>,
     pub duckdb_destroy_base_statistic:
@@ -1736,27 +1734,33 @@ pub struct duckdb_ext_api_v1 {
     pub duckdb_statistic_set_has_nulls: ::std::option::Option<unsafe extern "C" fn(statistic: duckdb_base_statistic)>,
     pub duckdb_statistic_set_has_no_nulls:
         ::std::option::Option<unsafe extern "C" fn(statistic: duckdb_base_statistic)>,
+    pub duckdb_wrap_external_vector_buffer: ::std::option::Option<
+        unsafe extern "C" fn(buffer: external_buffer, free_fn: external_buffer_free) -> duckdb_vector_buffer,
+    >,
+    pub duckdb_free_vector_buffer: ::std::option::Option<unsafe extern "C" fn(buffer: *mut duckdb_vector_buffer)>,
     pub duckdb_create_vector:
         ::std::option::Option<unsafe extern "C" fn(type_: duckdb_logical_type, capacity: idx_t) -> duckdb_vector>,
     pub duckdb_destroy_vector: ::std::option::Option<unsafe extern "C" fn(vector: *mut duckdb_vector)>,
     pub duckdb_slice_vector: ::std::option::Option<
         unsafe extern "C" fn(vector: duckdb_vector, dict_size: idx_t, selection: duckdb_selection_vector, len: idx_t),
     >,
-    pub duckdb_assign_constant_vector:
+    pub duckdb_vector_reference_value:
         ::std::option::Option<unsafe extern "C" fn(vector: duckdb_vector, value: duckdb_value)>,
-    pub duckdb_reference_vector:
+    pub duckdb_vector_reference_vector:
         ::std::option::Option<unsafe extern "C" fn(to_vector: duckdb_vector, from_vector: duckdb_vector)>,
     pub duckdb_create_selection_vector:
         ::std::option::Option<unsafe extern "C" fn(size: idx_t) -> duckdb_selection_vector>,
     pub duckdb_destroy_selection_vector: ::std::option::Option<unsafe extern "C" fn(vector: duckdb_selection_vector)>,
     pub duckdb_selection_vector_get_data_ptr:
         ::std::option::Option<unsafe extern "C" fn(vector: duckdb_selection_vector) -> *mut sel_t>,
-    pub duckdb_stringify_data_chunk:
+    pub duckdb_data_chunk_to_string:
         ::std::option::Option<unsafe extern "C" fn(chunk: duckdb_data_chunk) -> *const ::std::os::raw::c_char>,
     pub duckdb_set_dictionary_vector_id: ::std::option::Option<
         unsafe extern "C" fn(dict: duckdb_vector, str_: *const ::std::os::raw::c_char, str_len: ::std::os::raw::c_uint),
     >,
-    pub duckdb_verify_data_chunk: ::std::option::Option<unsafe extern "C" fn(chunk: duckdb_data_chunk)>,
+    pub duckdb_data_chunk_verify: ::std::option::Option<unsafe extern "C" fn(chunk: duckdb_data_chunk)>,
+    pub duckdb_assign_buffer_to_vector:
+        ::std::option::Option<unsafe extern "C" fn(vector: duckdb_vector, buffer: duckdb_vector_buffer)>,
 }
 static __DUCKDB_OPEN: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
@@ -8864,38 +8868,6 @@ pub unsafe fn duckdb_append_default_to_chunk(
     (fun)(appender, chunk, col, row)
 }
 
-static __NEWCPPVECTORBUFFER: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn NewCppVectorBuffer(
-    buffer: *mut ExternalBuffer,
-    free_fn: external_buffer_free,
-) -> *mut CppVectorBuffer {
-    let function_ptr = __NEWCPPVECTORBUFFER.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(
-        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
-    );
-    let fun: unsafe extern "C" fn(
-        buffer: *mut ExternalBuffer,
-        free_fn: external_buffer_free,
-    ) -> *mut CppVectorBuffer = ::std::mem::transmute(function_ptr);
-    (fun)(buffer, free_fn)
-}
-
-static __ASSIGNBUFFERTOVEC: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
-    ::std::ptr::null_mut(),
-);
-pub unsafe fn AssignBufferToVec(vec: duckdb_vector, buffer: *mut CppVectorBuffer) {
-    let function_ptr = __ASSIGNBUFFERTOVEC.load(::std::sync::atomic::Ordering::Acquire);
-    assert!(
-        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
-    );
-    let fun: unsafe extern "C" fn(vec: duckdb_vector, buffer: *mut CppVectorBuffer) = ::std::mem::transmute(
-        function_ptr,
-    );
-    (fun)(vec, buffer)
-}
-
 static __DUCKDB_CREATE_BASE_STATISTIC: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -9000,6 +8972,40 @@ pub unsafe fn duckdb_statistic_set_has_no_nulls(statistic: duckdb_base_statistic
     (fun)(statistic)
 }
 
+static __DUCKDB_WRAP_EXTERNAL_VECTOR_BUFFER: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_wrap_external_vector_buffer(
+    buffer: external_buffer,
+    free_fn: external_buffer_free,
+) -> duckdb_vector_buffer {
+    let function_ptr = __DUCKDB_WRAP_EXTERNAL_VECTOR_BUFFER
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(
+        buffer: external_buffer,
+        free_fn: external_buffer_free,
+    ) -> duckdb_vector_buffer = ::std::mem::transmute(function_ptr);
+    (fun)(buffer, free_fn)
+}
+
+static __DUCKDB_FREE_VECTOR_BUFFER: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_free_vector_buffer(buffer: *mut duckdb_vector_buffer) {
+    let function_ptr = __DUCKDB_FREE_VECTOR_BUFFER
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(buffer: *mut duckdb_vector_buffer) = ::std::mem::transmute(
+        function_ptr,
+    );
+    (fun)(buffer)
+}
+
 static __DUCKDB_CREATE_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
@@ -9057,11 +9063,11 @@ pub unsafe fn duckdb_slice_vector(
     (fun)(vector, dict_size, selection, len)
 }
 
-static __DUCKDB_ASSIGN_CONSTANT_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+static __DUCKDB_VECTOR_REFERENCE_VALUE: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
-pub unsafe fn duckdb_assign_constant_vector(vector: duckdb_vector, value: duckdb_value) {
-    let function_ptr = __DUCKDB_ASSIGN_CONSTANT_VECTOR
+pub unsafe fn duckdb_vector_reference_value(vector: duckdb_vector, value: duckdb_value) {
+    let function_ptr = __DUCKDB_VECTOR_REFERENCE_VALUE
         .load(::std::sync::atomic::Ordering::Acquire);
     assert!(
         ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
@@ -9072,14 +9078,14 @@ pub unsafe fn duckdb_assign_constant_vector(vector: duckdb_vector, value: duckdb
     (fun)(vector, value)
 }
 
-static __DUCKDB_REFERENCE_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+static __DUCKDB_VECTOR_REFERENCE_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
-pub unsafe fn duckdb_reference_vector(
+pub unsafe fn duckdb_vector_reference_vector(
     to_vector: duckdb_vector,
     from_vector: duckdb_vector,
 ) {
-    let function_ptr = __DUCKDB_REFERENCE_VECTOR
+    let function_ptr = __DUCKDB_VECTOR_REFERENCE_VECTOR
         .load(::std::sync::atomic::Ordering::Acquire);
     assert!(
         ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
@@ -9138,13 +9144,13 @@ pub unsafe fn duckdb_selection_vector_get_data_ptr(
     (fun)(vector)
 }
 
-static __DUCKDB_STRINGIFY_DATA_CHUNK: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+static __DUCKDB_DATA_CHUNK_TO_STRING: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
-pub unsafe fn duckdb_stringify_data_chunk(
+pub unsafe fn duckdb_data_chunk_to_string(
     chunk: duckdb_data_chunk,
 ) -> *const ::std::os::raw::c_char {
-    let function_ptr = __DUCKDB_STRINGIFY_DATA_CHUNK
+    let function_ptr = __DUCKDB_DATA_CHUNK_TO_STRING
         .load(::std::sync::atomic::Ordering::Acquire);
     assert!(
         ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
@@ -9176,11 +9182,11 @@ pub unsafe fn duckdb_set_dictionary_vector_id(
     (fun)(dict, str_, str_len)
 }
 
-static __DUCKDB_VERIFY_DATA_CHUNK: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+static __DUCKDB_DATA_CHUNK_VERIFY: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
     ::std::ptr::null_mut(),
 );
-pub unsafe fn duckdb_verify_data_chunk(chunk: duckdb_data_chunk) {
-    let function_ptr = __DUCKDB_VERIFY_DATA_CHUNK
+pub unsafe fn duckdb_data_chunk_verify(chunk: duckdb_data_chunk) {
+    let function_ptr = __DUCKDB_DATA_CHUNK_VERIFY
         .load(::std::sync::atomic::Ordering::Acquire);
     assert!(
         ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
@@ -9189,6 +9195,24 @@ pub unsafe fn duckdb_verify_data_chunk(chunk: duckdb_data_chunk) {
         function_ptr,
     );
     (fun)(chunk)
+}
+
+static __DUCKDB_ASSIGN_BUFFER_TO_VECTOR: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(
+    ::std::ptr::null_mut(),
+);
+pub unsafe fn duckdb_assign_buffer_to_vector(
+    vector: duckdb_vector,
+    buffer: duckdb_vector_buffer,
+) {
+    let function_ptr = __DUCKDB_ASSIGN_BUFFER_TO_VECTOR
+        .load(::std::sync::atomic::Ordering::Acquire);
+    assert!(
+        ! function_ptr.is_null(), "DuckDB API not initialized or DuckDB feature omitted"
+    );
+    let fun: unsafe extern "C" fn(vector: duckdb_vector, buffer: duckdb_vector_buffer) = ::std::mem::transmute(
+        function_ptr,
+    );
+    (fun)(vector, buffer)
 }
 
 /// Like DUCKDB_EXTENSION_API_INIT macro
@@ -10835,14 +10859,6 @@ pub unsafe fn duckdb_rs_extension_api_init(
         __DUCKDB_APPEND_DEFAULT_TO_CHUNK
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).NewCppVectorBuffer {
-        __NEWCPPVECTORBUFFER
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
-    if let Some(fun) = (*p_api).AssignBufferToVec {
-        __ASSIGNBUFFERTOVEC
-            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
-    }
     if let Some(fun) = (*p_api).duckdb_create_base_statistic {
         __DUCKDB_CREATE_BASE_STATISTIC
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
@@ -10867,6 +10883,14 @@ pub unsafe fn duckdb_rs_extension_api_init(
         __DUCKDB_STATISTIC_SET_HAS_NO_NULLS
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
+    if let Some(fun) = (*p_api).duckdb_wrap_external_vector_buffer {
+        __DUCKDB_WRAP_EXTERNAL_VECTOR_BUFFER
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_free_vector_buffer {
+        __DUCKDB_FREE_VECTOR_BUFFER
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
     if let Some(fun) = (*p_api).duckdb_create_vector {
         __DUCKDB_CREATE_VECTOR
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
@@ -10879,12 +10903,12 @@ pub unsafe fn duckdb_rs_extension_api_init(
         __DUCKDB_SLICE_VECTOR
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).duckdb_assign_constant_vector {
-        __DUCKDB_ASSIGN_CONSTANT_VECTOR
+    if let Some(fun) = (*p_api).duckdb_vector_reference_value {
+        __DUCKDB_VECTOR_REFERENCE_VALUE
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).duckdb_reference_vector {
-        __DUCKDB_REFERENCE_VECTOR
+    if let Some(fun) = (*p_api).duckdb_vector_reference_vector {
+        __DUCKDB_VECTOR_REFERENCE_VECTOR
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).duckdb_create_selection_vector {
@@ -10899,16 +10923,20 @@ pub unsafe fn duckdb_rs_extension_api_init(
         __DUCKDB_SELECTION_VECTOR_GET_DATA_PTR
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).duckdb_stringify_data_chunk {
-        __DUCKDB_STRINGIFY_DATA_CHUNK
+    if let Some(fun) = (*p_api).duckdb_data_chunk_to_string {
+        __DUCKDB_DATA_CHUNK_TO_STRING
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     if let Some(fun) = (*p_api).duckdb_set_dictionary_vector_id {
         __DUCKDB_SET_DICTIONARY_VECTOR_ID
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
-    if let Some(fun) = (*p_api).duckdb_verify_data_chunk {
-        __DUCKDB_VERIFY_DATA_CHUNK
+    if let Some(fun) = (*p_api).duckdb_data_chunk_verify {
+        __DUCKDB_DATA_CHUNK_VERIFY
+            .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
+    }
+    if let Some(fun) = (*p_api).duckdb_assign_buffer_to_vector {
+        __DUCKDB_ASSIGN_BUFFER_TO_VECTOR
             .store(fun as usize as *mut (), ::std::sync::atomic::Ordering::Release);
     }
     Ok(true)

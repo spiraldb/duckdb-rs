@@ -2,13 +2,14 @@ use super::{LogicalTypeHandle, Value};
 use crate::{
     core::selection_vector::SelectionVector,
     ffi::{
-        duckdb_assign_constant_vector, duckdb_create_vector, duckdb_destroy_vector, duckdb_list_entry,
+        duckdb_assign_constant_to_vector, duckdb_create_vector, duckdb_destroy_vector, duckdb_list_entry,
         duckdb_list_vector_get_child, duckdb_list_vector_get_size, duckdb_list_vector_reserve,
-        duckdb_list_vector_set_size, duckdb_reference_vector, duckdb_set_dictionary_vector_id, duckdb_slice_vector,
-        duckdb_struct_type_child_count, duckdb_struct_type_child_name, duckdb_struct_vector_get_child,
-        duckdb_validity_set_row_invalid, duckdb_vector, duckdb_vector_assign_string_element,
-        duckdb_vector_assign_string_element_len, duckdb_vector_ensure_validity_writable, duckdb_vector_get_column_type,
-        duckdb_vector_get_data, duckdb_vector_get_validity, duckdb_vector_size,
+        duckdb_list_vector_set_size, duckdb_reference_vector_from_vector, duckdb_set_dictionary_vector_id,
+        duckdb_slice_vector, duckdb_struct_type_child_count, duckdb_struct_type_child_name,
+        duckdb_struct_vector_get_child, duckdb_validity_set_row_invalid, duckdb_vector,
+        duckdb_vector_assign_string_element, duckdb_vector_assign_string_element_len,
+        duckdb_vector_ensure_validity_writable, duckdb_vector_get_column_type, duckdb_vector_get_data,
+        duckdb_vector_get_validity, duckdb_vector_size,
     },
 };
 use libduckdb_sys::{
@@ -186,13 +187,13 @@ impl FlatVector {
 
     pub fn assign_to_constant(&mut self, value: &Value) {
         // Copies value internally
-        unsafe { duckdb_assign_constant_vector(self.ptr, value.ptr) }
+        unsafe { duckdb_assign_constant_to_vector(self.ptr, value.ptr) }
         // Sets the internal duckdb buffer to be of size 1
         self.capacity = 1;
     }
 
     pub fn reference(&mut self, other: &FlatVector) {
-        unsafe { duckdb_reference_vector(self.ptr, other.ptr) }
+        unsafe { duckdb_reference_vector_from_vector(self.ptr, other.ptr) }
         self.capacity = other.capacity;
     }
 

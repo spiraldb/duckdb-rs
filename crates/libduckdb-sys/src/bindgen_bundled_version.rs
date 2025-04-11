@@ -307,6 +307,12 @@ pub struct _duckdb_selection_vector {
     pub internal_ptr: *mut ::std::os::raw::c_void,
 }
 pub type duckdb_selection_vector = *mut _duckdb_selection_vector;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _duckdb_vector_buffer {
+    pub ptr: *mut ::std::os::raw::c_void,
+}
+pub type duckdb_vector_buffer = *mut _duckdb_vector_buffer;
 #[doc = "! Strings are composed of a char pointer and a size. You must free string.data\n! with `duckdb_free`."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -663,6 +669,14 @@ pub struct duckdb_extension_access {
         ) -> *const ::std::os::raw::c_void,
     >,
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _external_buffer {
+    _unused: [u8; 0],
+}
+#[doc = "! A opaque buffer which can be interpreted as a data buffer"]
+pub type external_buffer = *mut _external_buffer;
+pub type external_buffer_free = ::std::option::Option<unsafe extern "C" fn(buffer: external_buffer)>;
 unsafe extern "C" {
     #[doc = "Creates a new database instance cache.\nThe instance cache is necessary if a client/program (re)opens multiple databases to the same file within the same\nprocess. Must be destroyed with 'duckdb_destroy_instance_cache'.\n\n @return The database instance cache."]
     pub fn duckdb_create_instance_cache() -> duckdb_instance_cache;
@@ -1787,6 +1801,17 @@ unsafe extern "C" {
     pub fn duckdb_data_chunk_set_size(chunk: duckdb_data_chunk, size: idx_t);
 }
 unsafe extern "C" {
+    #[doc = "Create a new duckdb vector buffer wrapping a externally allocated buffer with a function to specify that the memory is\nno long required by duckdb.\n @param buffer The buffer which should used as a vector buffer.\n\n @param free_fn A function which will be called once duckdb is finished with the buffer.\n\n @return A ptr to the duckdb wrapped buffer."]
+    pub fn duckdb_wrap_external_vector_buffer(
+        buffer: external_buffer,
+        free_fn: external_buffer_free,
+    ) -> duckdb_vector_buffer;
+}
+unsafe extern "C" {
+    #[doc = "Free the reference to the buffer created from `duckdb_wrap_external_vector_buffer`"]
+    pub fn duckdb_free_vector_buffer(buffer: *mut duckdb_vector_buffer);
+}
+unsafe extern "C" {
     #[doc = "Creates a flat vector."]
     pub fn duckdb_create_vector(type_: duckdb_logical_type, capacity: idx_t) -> duckdb_vector;
 }
@@ -1857,11 +1882,11 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     #[doc = "Copies the value from `value` to `vector`."]
-    pub fn duckdb_assign_constant_vector(vector: duckdb_vector, value: duckdb_value);
+    pub fn duckdb_vector_reference_value(vector: duckdb_vector, value: duckdb_value);
 }
 unsafe extern "C" {
     #[doc = "References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer"]
-    pub fn duckdb_reference_vector(to_vector: duckdb_vector, from_vector: duckdb_vector);
+    pub fn duckdb_vector_reference_vector(to_vector: duckdb_vector, from_vector: duckdb_vector);
 }
 unsafe extern "C" {
     pub fn duckdb_set_dictionary_vector_id(
@@ -1871,10 +1896,16 @@ unsafe extern "C" {
     );
 }
 unsafe extern "C" {
-    pub fn duckdb_stringify_data_chunk(chunk: duckdb_data_chunk) -> *const ::std::os::raw::c_char;
+    #[doc = "Returns the debug string from the data chunk.\nThe string returned must be freed."]
+    pub fn duckdb_data_chunk_to_string(chunk: duckdb_data_chunk) -> *const ::std::os::raw::c_char;
 }
 unsafe extern "C" {
-    pub fn duckdb_verify_data_chunk(chunk: duckdb_data_chunk);
+    #[doc = "Verifies the data chunk is a valid chunk."]
+    pub fn duckdb_data_chunk_verify(chunk: duckdb_data_chunk);
+}
+unsafe extern "C" {
+    #[doc = "Sets the data buffer of a vector.\n @param vector The vector which will have its buffer set.\n\n @param buffer The vector buffer which will be referenced."]
+    pub fn duckdb_assign_buffer_to_vector(vector: duckdb_vector, buffer: duckdb_vector_buffer);
 }
 unsafe extern "C" {
     #[doc = "todo"]
