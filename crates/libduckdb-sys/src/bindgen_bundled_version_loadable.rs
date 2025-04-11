@@ -1756,7 +1756,7 @@ pub struct duckdb_ext_api_v1 {
     pub duckdb_data_chunk_to_string:
         ::std::option::Option<unsafe extern "C" fn(chunk: duckdb_data_chunk) -> *const ::std::os::raw::c_char>,
     pub duckdb_set_dictionary_vector_id: ::std::option::Option<
-        unsafe extern "C" fn(dict: duckdb_vector, str_: *const ::std::os::raw::c_char, str_len: ::std::os::raw::c_uint),
+        unsafe extern "C" fn(dict: duckdb_vector, id: *const ::std::os::raw::c_char, id_len: ::std::os::raw::c_uint),
     >,
     pub duckdb_data_chunk_verify: ::std::option::Option<unsafe extern "C" fn(chunk: duckdb_data_chunk)>,
     pub duckdb_assign_buffer_to_vector:
@@ -9166,8 +9166,8 @@ static __DUCKDB_SET_DICTIONARY_VECTOR_ID: ::std::sync::atomic::AtomicPtr<()> = :
 );
 pub unsafe fn duckdb_set_dictionary_vector_id(
     dict: duckdb_vector,
-    str_: *const ::std::os::raw::c_char,
-    str_len: ::std::os::raw::c_uint,
+    id: *const ::std::os::raw::c_char,
+    id_len: ::std::os::raw::c_uint,
 ) {
     let function_ptr = __DUCKDB_SET_DICTIONARY_VECTOR_ID
         .load(::std::sync::atomic::Ordering::Acquire);
@@ -9176,10 +9176,10 @@ pub unsafe fn duckdb_set_dictionary_vector_id(
     );
     let fun: unsafe extern "C" fn(
         dict: duckdb_vector,
-        str_: *const ::std::os::raw::c_char,
-        str_len: ::std::os::raw::c_uint,
+        id: *const ::std::os::raw::c_char,
+        id_len: ::std::os::raw::c_uint,
     ) = ::std::mem::transmute(function_ptr);
-    (fun)(dict, str_, str_len)
+    (fun)(dict, id, id_len)
 }
 
 static __DUCKDB_DATA_CHUNK_VERIFY: ::std::sync::atomic::AtomicPtr<()> = ::std::sync::atomic::AtomicPtr::new(

@@ -1877,7 +1877,7 @@ unsafe extern "C" {
     pub fn duckdb_array_vector_get_child(vector: duckdb_vector) -> duckdb_vector;
 }
 unsafe extern "C" {
-    #[doc = "todo...* @param vector The vector which is to become a dictionary\n @param selection The selection vector\n @param len The length of the selection vector"]
+    #[doc = "Creates a dictionary vector from a vector and a selection mask, the resulting vector will have length `len`.\n\n @param dict_size The size of the `dict_values`\n @param selection The selection vector\n @param len The length of the selection vector"]
     pub fn duckdb_slice_vector(vector: duckdb_vector, dict_size: idx_t, selection: duckdb_selection_vector, len: idx_t);
 }
 unsafe extern "C" {
@@ -1889,10 +1889,11 @@ unsafe extern "C" {
     pub fn duckdb_vector_reference_vector(to_vector: duckdb_vector, from_vector: duckdb_vector);
 }
 unsafe extern "C" {
+    #[doc = "Sets an id on the values of a dictionary, if two ids are equal then the value vector is assumed identical.\n @param dict The dictionary vector\n @param id The id\n @param id_len The string length of the id"]
     pub fn duckdb_set_dictionary_vector_id(
         dict: duckdb_vector,
-        str_: *const ::std::os::raw::c_char,
-        str_len: ::std::os::raw::c_uint,
+        id: *const ::std::os::raw::c_char,
+        id_len: ::std::os::raw::c_uint,
     );
 }
 unsafe extern "C" {
