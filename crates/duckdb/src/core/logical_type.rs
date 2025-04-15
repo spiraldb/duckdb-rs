@@ -10,6 +10,7 @@ use crate::ffi::*;
 #[repr(u32)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum LogicalTypeId {
+    Invalid = DUCKDB_TYPE_DUCKDB_TYPE_INVALID,
     /// Boolean
     Boolean = DUCKDB_TYPE_DUCKDB_TYPE_BOOLEAN,
     /// Tinyint

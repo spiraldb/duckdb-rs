@@ -521,6 +521,9 @@ pub fn flat_vector_to_arrow_array(
         LogicalTypeId::Uuid => {
             todo!()
         }
+        LogicalTypeId::Invalid => {
+            todo!()
+        }
     }
 }
 
