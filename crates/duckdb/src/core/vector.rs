@@ -1,17 +1,27 @@
-use std::{any::Any, ffi::CString, slice};
-
-use libduckdb_sys::{
-    duckdb_array_type_array_size, duckdb_array_vector_get_child, duckdb_validity_row_is_valid, DuckDbString,
+use super::{LogicalTypeHandle, Value};
+use crate::{
+    core::selection_vector::SelectionVector,
+    ffi::{
+        duckdb_create_vector, duckdb_destroy_vector, duckdb_list_entry, duckdb_list_vector_get_child,
+        duckdb_list_vector_get_size, duckdb_list_vector_reserve, duckdb_list_vector_set_size,
+        duckdb_set_dictionary_vector_id, duckdb_slice_vector, duckdb_struct_type_child_count,
+        duckdb_struct_type_child_name, duckdb_struct_vector_get_child, duckdb_validity_set_row_invalid, duckdb_vector,
+        duckdb_vector_assign_string_element, duckdb_vector_assign_string_element_len,
+        duckdb_vector_ensure_validity_writable, duckdb_vector_get_column_type, duckdb_vector_get_data,
+        duckdb_vector_get_validity, duckdb_vector_reference_value, duckdb_vector_reference_vector, duckdb_vector_size,
+    },
 };
-
-use super::LogicalTypeHandle;
-use crate::ffi::{
-    duckdb_list_entry, duckdb_list_vector_get_child, duckdb_list_vector_get_size, duckdb_list_vector_reserve,
-    duckdb_list_vector_set_size, duckdb_struct_type_child_count, duckdb_struct_type_child_name,
-    duckdb_struct_vector_get_child, duckdb_validity_set_row_invalid, duckdb_vector,
-    duckdb_vector_assign_string_element, duckdb_vector_assign_string_element_len,
-    duckdb_vector_ensure_validity_writable, duckdb_vector_get_column_type, duckdb_vector_get_data,
-    duckdb_vector_get_validity, duckdb_vector_size,
+use libduckdb_sys::{
+    duckdb_array_type_array_size, duckdb_array_vector_get_child, duckdb_create_array_value,
+    duckdb_create_scalar_function, duckdb_validity_row_is_valid, idx_t, DuckDbString,
+};
+use std::{
+    any::Any,
+    ffi::CString,
+    fmt::{Debug, Formatter},
+    io,
+    io::Write,
+    slice,
 };
 
 /// Vector trait.
@@ -26,6 +36,17 @@ pub trait Vector {
 pub struct FlatVector {
     ptr: duckdb_vector,
     capacity: usize,
+    owned: bool,
+}
+
+impl Clone for FlatVector {
+    fn clone(&self) -> Self {
+        Self {
+            ptr: self.ptr,
+            capacity: self.capacity,
+            owned: false,
+        }
+    }
 }
 
 impl From<duckdb_vector> for FlatVector {
@@ -33,6 +54,7 @@ impl From<duckdb_vector> for FlatVector {
         Self {
             ptr,
             capacity: unsafe { duckdb_vector_size() as usize },
+            owned: false,
         }
     }
 }
@@ -47,9 +69,30 @@ impl Vector for FlatVector {
     }
 }
 
+impl Drop for FlatVector {
+    fn drop(&mut self) {
+        if self.owned && !self.ptr.is_null() {
+            unsafe { duckdb_destroy_vector(&mut self.ptr) }
+        }
+    }
+}
+
 impl FlatVector {
     fn with_capacity(ptr: duckdb_vector, capacity: usize) -> Self {
-        Self { ptr, capacity }
+        Self {
+            ptr,
+            capacity,
+            owned: false,
+        }
+    }
+
+    pub fn allocate_new_vector_with_capacity(logical_type: LogicalTypeHandle, capacity: usize) -> Self {
+        let ptr = unsafe { duckdb_create_vector(logical_type.ptr, capacity as u64) };
+        Self {
+            ptr,
+            capacity,
+            owned: true,
+        }
     }
 
     /// Returns the capacity of the vector
@@ -105,6 +148,20 @@ impl FlatVector {
         unsafe { LogicalTypeHandle::new(duckdb_vector_get_column_type(self.ptr)) }
     }
 
+    pub fn validity_slice(&self) -> Option<&mut [u64]> {
+        let ptr = unsafe { duckdb_vector_get_validity(self.ptr) };
+        if ptr.is_null() {
+            return None;
+        }
+        Some(unsafe { slice::from_raw_parts_mut(ptr, self.capacity()) })
+    }
+
+    pub fn init_get_validity_slice(&self) -> &mut [u64] {
+        unsafe { duckdb_vector_ensure_validity_writable(self.ptr) };
+        let ptr = unsafe { duckdb_vector_get_validity(self.ptr) };
+        unsafe { slice::from_raw_parts_mut(ptr, self.capacity()) }
+    }
+
     /// Set row as null
     pub fn set_null(&mut self, row: usize) {
         unsafe {
@@ -114,10 +171,39 @@ impl FlatVector {
         }
     }
 
+    pub fn slice(&mut self, dict_len: u64, selection_vector: SelectionVector) -> DictionaryVector {
+        unsafe { duckdb_slice_vector(self.ptr, dict_len, selection_vector.as_ptr(), selection_vector.len()) }
+        DictionaryVector::from(self.ptr)
+    }
+
+    pub fn set_dictionary_id(&mut self, dict_id: String) {
+        let dict_id = CString::new(dict_id).expect("CString::new failed");
+        unsafe {
+            duckdb_set_dictionary_vector_id(self.ptr, dict_id.as_ptr(), dict_id.as_bytes().len().try_into().unwrap())
+        }
+        std::mem::forget(dict_id);
+    }
+
+    pub fn assign_to_constant(&mut self, value: &Value) {
+        // Copies value internally
+        unsafe { duckdb_vector_reference_value(self.ptr, value.ptr) }
+        // Sets the internal duckdb buffer to be of size 1
+        self.capacity = 1;
+    }
+
+    pub fn reference(&mut self, other: &FlatVector) {
+        unsafe { duckdb_vector_reference_vector(self.ptr, other.ptr) }
+        self.capacity = other.capacity;
+    }
+
     /// Copy data to the vector.
     pub fn copy<T: Copy>(&mut self, data: &[T]) {
         assert!(data.len() <= self.capacity());
         self.as_mut_slice::<T>()[0..data.len()].copy_from_slice(data);
+    }
+
+    pub fn unowned_ptr(&self) -> duckdb_vector {
+        self.ptr
     }
 }
 
@@ -350,5 +436,25 @@ impl StructVector {
             let idx = duckdb_vector_get_validity(self.ptr);
             duckdb_validity_set_row_invalid(idx, row as u64);
         }
+    }
+}
+
+pub struct DictionaryVector {
+    ptr: duckdb_vector,
+    capacity: usize,
+}
+
+impl From<duckdb_vector> for DictionaryVector {
+    fn from(ptr: duckdb_vector) -> Self {
+        Self {
+            ptr,
+            capacity: unsafe { duckdb_vector_size() as usize },
+        }
+    }
+}
+
+impl DictionaryVector {
+    pub fn logical_type(&self) -> LogicalTypeHandle {
+        unsafe { LogicalTypeHandle::new(duckdb_vector_get_column_type(self.ptr)) }
     }
 }

@@ -1,32 +1,32 @@
 use super::{BindInfo, DataChunkHandle, InitInfo, LogicalTypeHandle, LogicalTypeId, TableFunctionInfo, VTab};
-use std::sync::Arc;
-use std::sync::{atomic::AtomicBool, Mutex};
+use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
 use crate::{
     core::{ArrayVector, FlatVector, Inserter, ListVector, StructVector, Vector},
     types::DuckString,
 };
-use arrow::array::as_map_array;
 use arrow::{
     array::{
-        as_boolean_array, as_generic_binary_array, as_large_list_array, as_list_array, as_primitive_array,
-        as_string_array, as_struct_array, Array, ArrayData, AsArray, BinaryArray, BinaryViewArray, BooleanArray,
-        Date32Array, Decimal128Array, FixedSizeBinaryArray, FixedSizeListArray, GenericBinaryBuilder, GenericListArray,
-        GenericStringArray, IntervalMonthDayNanoArray, LargeBinaryArray, LargeStringArray, OffsetSizeTrait,
-        PrimitiveArray, StringArray, StringViewArray, StructArray, TimestampMicrosecondArray, TimestampNanosecondArray,
+        as_boolean_array, as_generic_binary_array, as_large_list_array, as_list_array, as_map_array,
+        as_primitive_array, as_string_array, as_struct_array, Array, ArrayData, AsArray, BinaryArray, BinaryViewArray,
+        BooleanArray, Date32Array, Decimal128Array, FixedSizeBinaryArray, FixedSizeListArray, GenericBinaryBuilder,
+        GenericListArray, GenericStringArray, IntervalMonthDayNanoArray, LargeBinaryArray, LargeStringArray,
+        OffsetSizeTrait, PrimitiveArray, StringArray, StringViewArray, StructArray, TimestampMicrosecondArray,
+        TimestampNanosecondArray,
     },
     buffer::{BooleanBuffer, NullBuffer},
     compute::cast,
 };
 
 use arrow::{
+    array::{NullArray, TimestampMillisecondArray, TimestampSecondArray},
     datatypes::*,
     ffi::{from_ffi, FFI_ArrowArray, FFI_ArrowSchema},
     record_batch::RecordBatch,
 };
-
 use libduckdb_sys::{
-    duckdb_date, duckdb_hugeint, duckdb_interval, duckdb_string_t, duckdb_time, duckdb_timestamp, duckdb_vector,
+    duckdb_date, duckdb_hugeint, duckdb_interval, duckdb_string_t, duckdb_time, duckdb_timestamp, duckdb_timestamp_ms,
+    duckdb_timestamp_ns, duckdb_timestamp_s, duckdb_vector,
 };
 use num::{cast::AsPrimitive, ToPrimitive};
 
@@ -259,6 +259,7 @@ pub fn flat_vector_to_arrow_array(
 ) -> Result<Arc<dyn Array>, Box<dyn std::error::Error>> {
     let type_id = vector.logical_type().id();
     match type_id {
+        LogicalTypeId::SQLNull => Ok(Arc::new(NullArray::new(len))),
         LogicalTypeId::Integer => {
             let data = vector.as_slice_with_len::<i32>(len);
 
@@ -269,10 +270,43 @@ pub fn flat_vector_to_arrow_array(
                 }))),
             )))
         }
-        LogicalTypeId::Timestamp
-        | LogicalTypeId::TimestampMs
-        | LogicalTypeId::TimestampS
-        | LogicalTypeId::TimestampTZ => {
+        LogicalTypeId::TimestampS => {
+            let data = vector.as_slice_with_len::<duckdb_timestamp_s>(len);
+            let seconds = data.iter().map(|duckdb_timestamp_s { seconds }| *seconds);
+            let structs = TimestampSecondArray::from_iter_values_with_nulls(
+                seconds,
+                Some(NullBuffer::new(BooleanBuffer::collect_bool(data.len(), |row| {
+                    !vector.row_is_null(row as u64)
+                }))),
+            );
+
+            Ok(Arc::new(structs))
+        }
+        LogicalTypeId::TimestampMs => {
+            let data = vector.as_slice_with_len::<duckdb_timestamp_ms>(len);
+            let millis = data.iter().map(|duckdb_timestamp_ms { millis }| *millis);
+            let structs = TimestampMillisecondArray::from_iter_values_with_nulls(
+                millis,
+                Some(NullBuffer::new(BooleanBuffer::collect_bool(data.len(), |row| {
+                    !vector.row_is_null(row as u64)
+                }))),
+            );
+
+            Ok(Arc::new(structs))
+        }
+        LogicalTypeId::Timestamp => {
+            let data = vector.as_slice_with_len::<duckdb_timestamp>(len);
+            let micros = data.iter().map(|duckdb_timestamp { micros }| *micros);
+            let structs = TimestampMicrosecondArray::from_iter_values_with_nulls(
+                micros,
+                Some(NullBuffer::new(BooleanBuffer::collect_bool(data.len(), |row| {
+                    !vector.row_is_null(row as u64)
+                }))),
+            );
+
+            Ok(Arc::new(structs))
+        }
+        LogicalTypeId::TimestampTZ => {
             let data = vector.as_slice_with_len::<duckdb_timestamp>(len);
             let micros = data.iter().map(|duckdb_timestamp { micros }| *micros);
             let structs = TimestampMicrosecondArray::from_iter_values_with_nulls(
@@ -445,9 +479,10 @@ pub fn flat_vector_to_arrow_array(
             )))
         }
         LogicalTypeId::TimestampNs => {
+            // JOE: below is untrue?
             // even nano second precision is stored in micros when using the c api
-            let data = vector.as_slice_with_len::<duckdb_timestamp>(len);
-            let nanos = data.iter().map(|duckdb_timestamp { micros }| *micros * 1000);
+            let data = vector.as_slice_with_len::<duckdb_timestamp_ns>(len);
+            let nanos = data.iter().map(|duckdb_timestamp_ns { nanos }| *nanos);
             let structs = TimestampNanosecondArray::from_iter_values_with_nulls(
                 nanos,
                 Some(NullBuffer::new(BooleanBuffer::collect_bool(data.len(), |row| {
@@ -484,6 +519,9 @@ pub fn flat_vector_to_arrow_array(
             todo!()
         }
         LogicalTypeId::Uuid => {
+            todo!()
+        }
+        LogicalTypeId::Invalid => {
             todo!()
         }
     }
@@ -540,6 +578,7 @@ impl WritableVector for DataChunkHandleSlice<'_> {
 /// To get the specific vector type, use the appropriate method.
 pub trait WritableVector {
     /// Get the vector as a `FlatVector`.
+    /// Note: the capacity is not necessarly correct.
     fn flat_vector(&mut self) -> FlatVector;
     /// Get the vector as a `ListVector`.
     fn list_vector(&mut self) -> ListVector;
@@ -547,6 +586,24 @@ pub trait WritableVector {
     fn array_vector(&mut self) -> ArrayVector;
     /// Get the vector as a `StructVector`.
     fn struct_vector(&mut self) -> StructVector;
+}
+
+impl WritableVector for FlatVector {
+    fn array_vector(&mut self) -> ArrayVector {
+        unreachable!()
+    }
+
+    fn flat_vector(&mut self) -> FlatVector {
+        self.clone()
+    }
+
+    fn struct_vector(&mut self) -> StructVector {
+        unreachable!()
+    }
+
+    fn list_vector(&mut self) -> ListVector {
+        unreachable!()
+    }
 }
 
 /// Writes an Arrow array to a `WritableVector`.
@@ -681,7 +738,12 @@ pub fn record_batch_to_duckdb_data_chunk(
 }
 
 fn primitive_array_to_flat_vector<T: ArrowPrimitiveType>(array: &PrimitiveArray<T>, out_vector: &mut FlatVector) {
-    // assert!(array.len() <= out_vector.capacity());
+    assert!(
+        array.len() <= out_vector.capacity(),
+        "array len {}, out vector capacity {}",
+        array.len(),
+        out_vector.capacity()
+    );
     out_vector.copy::<T::Native>(array.values());
     set_nulls_in_flat_vector(array, out_vector);
 }
