@@ -5,7 +5,7 @@ use libduckdb_sys::{
     duckdb_create_time, duckdb_create_timestamp, duckdb_create_timestamp_ms, duckdb_create_timestamp_ns,
     duckdb_create_timestamp_s, duckdb_create_uint16, duckdb_create_uint32, duckdb_create_uint64, duckdb_create_uint8,
     duckdb_create_varchar_length, duckdb_date, duckdb_time, duckdb_timestamp, duckdb_timestamp_ms, duckdb_timestamp_ns,
-    duckdb_timestamp_s, duckdb_timestamp_struct,
+    duckdb_timestamp_s,
 };
 use std::{ffi::CString, fmt};
 

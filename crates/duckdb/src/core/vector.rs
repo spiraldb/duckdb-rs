@@ -12,17 +12,9 @@ use crate::{
     },
 };
 use libduckdb_sys::{
-    duckdb_array_type_array_size, duckdb_array_vector_get_child, duckdb_create_array_value,
-    duckdb_create_scalar_function, duckdb_validity_row_is_valid, idx_t, DuckDbString,
+    duckdb_array_type_array_size, duckdb_array_vector_get_child, duckdb_validity_row_is_valid, DuckDbString,
 };
-use std::{
-    any::Any,
-    ffi::CString,
-    fmt::{Debug, Formatter},
-    io,
-    io::Write,
-    slice,
-};
+use std::{any::Any, ffi::CString, slice};
 
 /// Vector trait.
 pub trait Vector {
@@ -441,15 +433,11 @@ impl StructVector {
 
 pub struct DictionaryVector {
     ptr: duckdb_vector,
-    capacity: usize,
 }
 
 impl From<duckdb_vector> for DictionaryVector {
     fn from(ptr: duckdb_vector) -> Self {
-        Self {
-            ptr,
-            capacity: unsafe { duckdb_vector_size() as usize },
-        }
+        Self { ptr }
     }
 }
 
