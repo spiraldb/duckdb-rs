@@ -140,6 +140,8 @@ pub const duckdb_cast_mode_DUCKDB_CAST_TRY: duckdb_cast_mode = 1;
 pub type duckdb_cast_mode = ::std::os::raw::c_uint;
 #[doc = "! DuckDB's index type."]
 pub type idx_t = u64;
+#[doc = "! Type used for the selection vector"]
+pub type sel_t = u32;
 #[doc = "! The callback that will be called to destroy data, e.g.,\n! bind data (if any), init data (if any), extra data for replacement scans (if any)"]
 pub type duckdb_delete_callback_t = ::std::option::Option<unsafe extern "C" fn(data: *mut ::std::os::raw::c_void)>;
 #[doc = "! Used for threading, contains a task state. Must be destroyed with `duckdb_destroy_state`."]
@@ -291,14 +293,26 @@ pub struct duckdb_column {
     pub deprecated_name: *mut ::std::os::raw::c_char,
     pub internal_data: *mut ::std::os::raw::c_void,
 }
-#[doc = "! A vector to a specified column in a data chunk. Lives as long as the\n! data chunk lives, i.e., must not be destroyed."]
+#[doc = "! Either a vector to a specified column in a data chunk, or a allocated vector.\n! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.\n! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct _duckdb_vector {
     pub internal_ptr: *mut ::std::os::raw::c_void,
 }
-#[doc = "! A vector to a specified column in a data chunk. Lives as long as the\n! data chunk lives, i.e., must not be destroyed."]
+#[doc = "! Either a vector to a specified column in a data chunk, or a allocated vector.\n! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.\n! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`."]
 pub type duckdb_vector = *mut _duckdb_vector;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _duckdb_selection_vector {
+    pub internal_ptr: *mut ::std::os::raw::c_void,
+}
+pub type duckdb_selection_vector = *mut _duckdb_selection_vector;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _duckdb_vector_buffer {
+    pub ptr: *mut ::std::os::raw::c_void,
+}
+pub type duckdb_vector_buffer = *mut _duckdb_vector_buffer;
 #[doc = "! Strings are composed of a char pointer and a size. You must free string.data\n! with `duckdb_free`."]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -451,6 +465,12 @@ pub struct _duckdb_profiling_info {
 }
 #[doc = "! Holds a recursive tree that matches the query plan."]
 pub type duckdb_profiling_info = *mut _duckdb_profiling_info;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _duckdb_base_statistic {
+    pub internal_ptr: *mut ::std::os::raw::c_void,
+}
+pub type duckdb_base_statistic = *mut _duckdb_base_statistic;
 #[doc = "! Holds state during the C API extension intialization process"]
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -649,6 +669,14 @@ pub struct duckdb_extension_access {
         ) -> *const ::std::os::raw::c_void,
     >,
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct _external_buffer {
+    _unused: [u8; 0],
+}
+#[doc = "! A opaque buffer which can be interpreted as a data buffer"]
+pub type external_buffer = *mut _external_buffer;
+pub type external_buffer_free = ::std::option::Option<unsafe extern "C" fn(buffer: external_buffer)>;
 unsafe extern "C" {
     #[doc = "Creates a new database instance cache.\nThe instance cache is necessary if a client/program (re)opens multiple databases to the same file within the same\nprocess. Must be destroyed with 'duckdb_destroy_instance_cache'.\n\n @return The database instance cache."]
     pub fn duckdb_create_instance_cache() -> duckdb_instance_cache;
@@ -1773,6 +1801,25 @@ unsafe extern "C" {
     pub fn duckdb_data_chunk_set_size(chunk: duckdb_data_chunk, size: idx_t);
 }
 unsafe extern "C" {
+    #[doc = "Create a new duckdb vector buffer wrapping a externally allocated buffer with a function to specify that the memory is\nno long required by duckdb.\n @param buffer The buffer which should used as a vector buffer.\n\n @param free_fn A function which will be called once duckdb is finished with the buffer.\n\n @return A ptr to the duckdb wrapped buffer."]
+    pub fn duckdb_wrap_external_vector_buffer(
+        buffer: external_buffer,
+        free_fn: external_buffer_free,
+    ) -> duckdb_vector_buffer;
+}
+unsafe extern "C" {
+    #[doc = "Free the reference to the buffer created from `duckdb_wrap_external_vector_buffer`"]
+    pub fn duckdb_free_vector_buffer(buffer: *mut duckdb_vector_buffer);
+}
+unsafe extern "C" {
+    #[doc = "Creates a flat vector."]
+    pub fn duckdb_create_vector(type_: duckdb_logical_type, capacity: idx_t) -> duckdb_vector;
+}
+unsafe extern "C" {
+    #[doc = "Destroys the vector and de-allocates all memory allocated for that vector, if unused else where."]
+    pub fn duckdb_destroy_vector(vector: *mut duckdb_vector);
+}
+unsafe extern "C" {
     #[doc = "Retrieves the column type of the specified vector.\n\nThe result must be destroyed with `duckdb_destroy_logical_type`.\n\n @param vector The vector get the data from\n @return The type of the vector"]
     pub fn duckdb_vector_get_column_type(vector: duckdb_vector) -> duckdb_logical_type;
 }
@@ -1828,6 +1875,50 @@ unsafe extern "C" {
 unsafe extern "C" {
     #[doc = "Retrieves the child vector of a array vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\nThe resulting vector has the size of the parent vector multiplied by the array size.\n\n @param vector The vector\n @return The child vector"]
     pub fn duckdb_array_vector_get_child(vector: duckdb_vector) -> duckdb_vector;
+}
+unsafe extern "C" {
+    #[doc = "Creates a dictionary vector from a vector and a selection mask, the resulting vector will have length `len`.\n\n @param dict_size The size of the `dict_values`\n @param selection The selection vector\n @param len The length of the selection vector"]
+    pub fn duckdb_slice_vector(vector: duckdb_vector, dict_size: idx_t, selection: duckdb_selection_vector, len: idx_t);
+}
+unsafe extern "C" {
+    #[doc = "Copies the value from `value` to `vector`."]
+    pub fn duckdb_vector_reference_value(vector: duckdb_vector, value: duckdb_value);
+}
+unsafe extern "C" {
+    #[doc = "References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer"]
+    pub fn duckdb_vector_reference_vector(to_vector: duckdb_vector, from_vector: duckdb_vector);
+}
+unsafe extern "C" {
+    #[doc = "Sets an id on the values of a dictionary, if two ids are equal then the value vector is assumed identical.\n @param dict The dictionary vector\n @param id The id\n @param id_len The string length of the id"]
+    pub fn duckdb_set_dictionary_vector_id(
+        dict: duckdb_vector,
+        id: *const ::std::os::raw::c_char,
+        id_len: ::std::os::raw::c_uint,
+    );
+}
+unsafe extern "C" {
+    #[doc = "Returns the debug string from the data chunk.\nThe string returned must be freed."]
+    pub fn duckdb_data_chunk_to_string(chunk: duckdb_data_chunk) -> *const ::std::os::raw::c_char;
+}
+unsafe extern "C" {
+    #[doc = "Verifies the data chunk is a valid chunk."]
+    pub fn duckdb_data_chunk_verify(chunk: duckdb_data_chunk);
+}
+unsafe extern "C" {
+    #[doc = "Sets the data buffer of a vector.\n @param vector The vector which will have its buffer set.\n\n @param buffer The vector buffer which will be referenced."]
+    pub fn duckdb_assign_buffer_to_vector(vector: duckdb_vector, buffer: duckdb_vector_buffer);
+}
+unsafe extern "C" {
+    #[doc = "todo"]
+    pub fn duckdb_create_selection_vector(size: idx_t) -> duckdb_selection_vector;
+}
+unsafe extern "C" {
+    #[doc = "todo"]
+    pub fn duckdb_destroy_selection_vector(vector: duckdb_selection_vector);
+}
+unsafe extern "C" {
+    #[doc = "todo"]
+    pub fn duckdb_selection_vector_get_data_ptr(vector: duckdb_selection_vector) -> *mut sel_t;
 }
 unsafe extern "C" {
     #[doc = "Returns whether or not a row is valid (i.e. not NULL) in the given validity mask.\n\n @param validity The validity mask, as obtained through `duckdb_vector_get_validity`\n @param row The row index\n @return true if the row is valid, false otherwise"]
@@ -1929,6 +2020,30 @@ unsafe extern "C" {
     #[doc = "Register the scalar function set within the given connection.\n\nThe set requires at least a single valid overload.\n\nIf the set is incomplete or a function with this name already exists DuckDBError is returned.\n\n @param con The connection to register it in.\n @param set The function set to register\n @return Whether or not the registration was successful."]
     pub fn duckdb_register_scalar_function_set(con: duckdb_connection, set: duckdb_scalar_function_set)
         -> duckdb_state;
+}
+unsafe extern "C" {
+    #[doc = "Returns a statistic for the type of the value passed."]
+    pub fn duckdb_create_base_statistic(type_: duckdb_logical_type) -> duckdb_base_statistic;
+}
+unsafe extern "C" {
+    #[doc = "Destroys a statistic"]
+    pub fn duckdb_destroy_base_statistic(statistic: *mut duckdb_base_statistic);
+}
+unsafe extern "C" {
+    #[doc = "Sets the min value for a numeric statistic (if null is passed this signifies no value)."]
+    pub fn duckdb_statistic_set_min(statistic: duckdb_base_statistic, min: duckdb_value, is_truncated: bool);
+}
+unsafe extern "C" {
+    #[doc = "Sets the maximum value for the given statistics object.\n\nThis function updates the maximum value stored in the statistics object based on the provided `max` value.\nFor numeric statistics, it directly sets the maximum value.\nFor string statistics, it updates the maximum value by comparing the provided string to the current maximum.\nIf the provided string is longer than the maximum string length allowed, the maximum string length is reset.\n\n @param statistic The statistics object to update.\n @param max The new maximum value to set, if the value is null this unsets the statistic.\n @param is_truncated If the value truncated, ignored for non-variable length values (e.g. ints)"]
+    pub fn duckdb_statistic_set_max(statistic: duckdb_base_statistic, max: duckdb_value, is_truncated: bool);
+}
+unsafe extern "C" {
+    #[doc = "Sets if the segment can contain NULL values"]
+    pub fn duckdb_statistic_set_has_nulls(statistic: duckdb_base_statistic);
+}
+unsafe extern "C" {
+    #[doc = "Set if the segment can contain values that are not null."]
+    pub fn duckdb_statistic_set_has_no_nulls(statistic: duckdb_base_statistic);
 }
 unsafe extern "C" {
     #[doc = "Creates a new empty aggregate function.\n\nThe return value should be destroyed with `duckdb_destroy_aggregate_function`.\n\n @return The aggregate function object."]
