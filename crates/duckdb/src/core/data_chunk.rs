@@ -101,7 +101,7 @@ impl DataChunkHandle {
     pub fn verify(&self) {
         #[cfg(debug_assertions)]
         {
-            unsafe { duckdb_data_chunk_verify(self.ptr) }
+            unsafe { crate::ffi::duckdb_data_chunk_verify(self.ptr) }
         }
     }
 }
