@@ -179,6 +179,8 @@ impl FlatVector {
     pub fn assign_to_constant(&mut self, value: &Value) {
         // Copies value internally
         unsafe { duckdb_vector_reference_value(self.ptr, value.ptr) }
+        // Sets the internal duckdb buffer to be of size 1
+        self.capacity = 1;
     }
 
     pub fn reference(&mut self, other: &FlatVector) {

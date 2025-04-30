@@ -10,6 +10,7 @@ use crate::ffi::{
 use std::{
     ffi::CStr,
     fmt::{Debug, Formatter},
+    ops::Deref,
 };
 
 /// Handle to the DataChunk in DuckDB.
@@ -33,10 +34,7 @@ impl Drop for DataChunkHandle {
 impl Debug for DataChunkHandle {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let cstr = unsafe { CStr::from_ptr(duckdb_data_chunk_to_string(self.ptr)) };
-        let result = match cstr.to_str() {
-            Ok(str) => f.write_str(str),
-            Err(_) => f.write_str("<invalid utf8>"),
-        };
+        let result = f.write_str(cstr.to_string_lossy().deref());
         unsafe { duckdb_free(cstr.as_ptr().cast_mut().cast()) };
         result
     }
