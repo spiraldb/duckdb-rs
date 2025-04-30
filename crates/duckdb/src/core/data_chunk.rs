@@ -5,7 +5,7 @@ use super::{
 use crate::ffi::{
     duckdb_create_data_chunk, duckdb_data_chunk, duckdb_data_chunk_get_column_count, duckdb_data_chunk_get_size,
     duckdb_data_chunk_get_vector, duckdb_data_chunk_set_size, duckdb_data_chunk_to_string, duckdb_data_chunk_verify,
-    duckdb_destroy_data_chunk,
+    duckdb_destroy_data_chunk, duckdb_free,
 };
 use std::{
     ffi::CStr,
@@ -33,7 +33,12 @@ impl Drop for DataChunkHandle {
 impl Debug for DataChunkHandle {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let cstr = unsafe { CStr::from_ptr(duckdb_data_chunk_to_string(self.ptr)) };
-        f.write_str(cstr.to_str().unwrap())
+        let result = match cstr.to_str() {
+            Ok(str) => f.write_str(str),
+            Err(_) => f.write_str("<invalid utf8>"),
+        };
+        unsafe { duckdb_free(cstr.as_ptr().cast_mut().cast()) };
+        result
     }
 }
 
