@@ -132,7 +132,7 @@ pub const duckdb_error_type_DUCKDB_ERROR_MISSING_EXTENSION: duckdb_error_type = 
 pub const duckdb_error_type_DUCKDB_ERROR_AUTOLOAD: duckdb_error_type = 40;
 pub const duckdb_error_type_DUCKDB_ERROR_SEQUENCE: duckdb_error_type = 41;
 pub const duckdb_error_type_DUCKDB_INVALID_CONFIGURATION: duckdb_error_type = 42;
-#[doc = "! An enum over DuckDB's different error types."]
+#[doc = "! An enum over DuckDB's different result types."]
 pub type duckdb_error_type = ::std::os::raw::c_uint;
 pub const duckdb_cast_mode_DUCKDB_CAST_NORMAL: duckdb_cast_mode = 0;
 pub const duckdb_cast_mode_DUCKDB_CAST_TRY: duckdb_cast_mode = 1;
@@ -144,7 +144,7 @@ pub type idx_t = u64;
 pub type sel_t = u32;
 #[doc = "! The callback that will be called to destroy data, e.g.,\n! bind data (if any), init data (if any), extra data for replacement scans (if any)"]
 pub type duckdb_delete_callback_t = ::std::option::Option<unsafe extern "C" fn(data: *mut ::std::os::raw::c_void)>;
-#[doc = "! Used for threading, contains a task state. Must be destroyed with `duckdb_destroy_task_state`."]
+#[doc = "! Used for threading, contains a task state. Must be destroyed with `duckdb_destroy_state`."]
 pub type duckdb_task_state = *mut ::std::os::raw::c_void;
 #[doc = "! Days are stored as days since 1970-01-01\n! Use the duckdb_from_date/duckdb_to_date function to extract individual information"]
 #[repr(C)]
