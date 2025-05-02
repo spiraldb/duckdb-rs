@@ -852,11 +852,13 @@ fn primitive_array_to_vector(array: &dyn Array, out: &mut dyn Vector) -> Result<
             );
         }
         // DuckDB Only supports timetamp_tz in microsecond precision
-        DataType::Timestamp(_, Some(tz)) => primitive_array_to_flat_vector_cast::<TimestampMicrosecondType>(
-            DataType::Timestamp(TimeUnit::Microsecond, Some(tz.clone())),
-            array,
-            out,
-        ),
+        DataType::Timestamp(TimeUnit::Microsecond, Some(tz)) => {
+            primitive_array_to_flat_vector_cast::<TimestampMicrosecondType>(
+                DataType::Timestamp(TimeUnit::Microsecond, Some(tz.clone())),
+                array,
+                out,
+            )
+        }
         DataType::Timestamp(unit, None) => match unit {
             TimeUnit::Second => primitive_array_to_flat_vector::<TimestampSecondType>(
                 as_primitive_array(array),
@@ -883,9 +885,10 @@ fn primitive_array_to_vector(array: &dyn Array, out: &mut dyn Vector) -> Result<
         }
         DataType::Date64 => primitive_array_to_flat_vector_cast::<Date32Type>(Date32Type::DATA_TYPE, array, out),
         DataType::Time32(_) => {
-            primitive_array_to_flat_vector_cast::<Time64MicrosecondType>(Time64MicrosecondType::DATA_TYPE, array, out)
+            // primitive_array_to_flat_vector_cast::<Time64MicrosecondType>(Time64MicrosecondType::DATA_TYPE, array, out)
+            todo!("Support casting time32 to time64")
         }
-        DataType::Time64(_) => {
+        DataType::Time64(TimeUnit::Microsecond) => {
             primitive_array_to_flat_vector_cast::<Time64MicrosecondType>(Time64MicrosecondType::DATA_TYPE, array, out)
         }
         datatype => return Err(format!("Data type \"{datatype}\" not yet supported by ArrowVTab").into()),
