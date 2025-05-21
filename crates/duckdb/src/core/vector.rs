@@ -140,18 +140,15 @@ impl FlatVector {
         unsafe { LogicalTypeHandle::new(duckdb_vector_get_column_type(self.ptr)) }
     }
 
+    /// Returns the validity mask of the vector, if one is allocated.
     pub fn validity_slice(&self) -> Option<&mut [u64]> {
-        let ptr = unsafe { duckdb_vector_get_validity(self.ptr) };
-        if ptr.is_null() {
-            return None;
-        }
-        Some(unsafe { slice::from_raw_parts_mut(ptr, self.capacity()) })
+        unsafe { duckdb_vector_get_validity(self.ptr).as_mut() }
+            .map(|ptr| unsafe { slice::from_raw_parts_mut(ptr, self.capacity().div_ceil(64)) })
     }
 
     pub fn init_get_validity_slice(&self) -> &mut [u64] {
         unsafe { duckdb_vector_ensure_validity_writable(self.ptr) };
-        let ptr = unsafe { duckdb_vector_get_validity(self.ptr) };
-        unsafe { slice::from_raw_parts_mut(ptr, self.capacity()) }
+        self.validity_slice().expect("validity slice should be initialized")
     }
 
     /// Set row as null
