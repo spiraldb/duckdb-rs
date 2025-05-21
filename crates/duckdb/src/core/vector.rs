@@ -143,7 +143,7 @@ impl FlatVector {
     /// Returns the validity mask of the vector, if one is allocated.
     pub fn validity_slice(&self) -> Option<&mut [u64]> {
         unsafe { duckdb_vector_get_validity(self.ptr).as_mut() }
-            .map(|ptr| unsafe { slice::from_raw_parts_mut(ptr, self.capacity().div_ceil(64 * 8)) })
+            .map(|ptr| unsafe { slice::from_raw_parts_mut(ptr, self.capacity().div_ceil(64)) })
     }
 
     pub fn init_get_validity_slice(&self) -> &mut [u64] {
